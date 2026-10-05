@@ -1,0 +1,7 @@
+.cache/
+output/
+research/raw/
+__pycache__/
+*.pyc
+.env
+cookies.json

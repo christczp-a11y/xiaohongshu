@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "xiaohongshu-mcp": {
+      "type": "http",
+      "url": "http://localhost:18060/mcp"
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    }
+  }
+}

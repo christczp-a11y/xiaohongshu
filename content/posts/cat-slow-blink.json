@@ -1,0 +1,87 @@
+{
+ "slug": "cat-slow-blink",
+ "title": "我是猫，我用慢眨眼说你好",
+ "attribution": "文字是猫的口吻（拟人）；配图为 AI 辅助绘制。仅供参考，不构成任何建议。",
+ "source_card": "AN-002",
+ "pages": [
+  {
+   "layer": "cover",
+   "title": [
+    "我是猫",
+    "我用慢眨眼说你好"
+   ],
+   "sub": "有研究发现，猫会回应人的慢眨眼",
+   "art": "cover"
+  },
+  {
+   "layer": "我说",
+   "text": [
+    "说实话，",
+    "被人直勾勾地盯着，",
+    "我会有点不自在。"
+   ],
+   "art": "stared"
+  },
+  {
+   "layer": "研究",
+   "text": [
+    "研究者做预实验时发现：",
+    "有些猫可能把直接对视当成威胁。",
+    "所以正式实验里，对照组也不直视。"
+   ],
+   "art": "awaypilot",
+   "dense": true
+  },
+  {
+   "layer": "研究",
+   "text": [
+    "实验一：21 只家猫（14 个家庭）。",
+    "主人对猫慢眨眼，",
+    "猫会更多地回以半眨眼和眯眼。"
+   ],
+   "art": "pair"
+  },
+  {
+   "layer": "研究",
+   "text": [
+    "实验二：陌生研究员对猫慢眨眼。",
+    "之后，猫更愿意靠近她伸出的手。"
+   ],
+   "small": "这个实验最后分析的只有 18 只猫。",
+   "art": "hand"
+  },
+  {
+   "layer": "我说",
+   "text": [
+    "作者说得很谨慎：",
+    "慢眨眼“可能”是一种积极的沟通，",
+    "想弄清猫的情绪，还需要更多研究。",
+    "所以我不敢替所有猫打包票。"
+   ],
+   "art": "shrug",
+   "dense": true
+  },
+  {
+   "layer": "给你",
+   "text": [
+    "如果对视让你累，看向别处也没关系。",
+    "想示好的时候，也可以慢一点眨眼。",
+    "这只是我们猫的习惯，人类会不会有用，研究没说。",
+    "不照做也没关系。"
+   ],
+   "art": "invite",
+   "dense": true
+  },
+  {
+   "layer": "sources",
+   "text": [
+    "Humphrey T., Proops L., Forman J., Spooner R., McComb K. (2020).",
+    "The role of cat eye narrowing movements in cat–human communication.",
+    "Scientific Reports, 10(1), 16503.",
+    "DOI: 10.1038/s41598-020-73426-0",
+    "实验对象：英国 Sussex 一带的家猫。"
+   ],
+   "art": "sources"
+  }
+ ]
+}

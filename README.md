@@ -22,6 +22,8 @@ python tools/render_cards.py content/posts/save-01.json      # → output/save-0
 |---|---|
 | `docs/01-strategy.md` | 定位、变现分层、风险、20 篇实验。**先读这个** |
 | `docs/08-route.md` | **当前路线（唯一有效）**：决策表、来源优先流程、阶段关卡、未决事项 |
+| `content/samples/cat-slow-blink/` | **样稿（带图）**：猫的慢眨眼，8 页；`contact.png` 为总览 |
+| `research/xhs-viral-principles-2026-10-05.md` | 小红书"爆款原理"：哪些能信、哪些矛盾、怎么验证 |
 | `content/animal/` | 故事卡模板与示范（AN-001，未完成） |
 | `docs/07-animal-direction-feasibility.md` | **动物社会故事方向的可行性分析**：结论、3 道上线前关卡、12 篇测试 |
 | `docs/06-positioning.md` | **当前定位与选材方向**（取代 01 的定位句），首批 10 个选题映射 |

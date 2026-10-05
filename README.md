@@ -1,4 +1,4 @@
-# 小红书账号：猫咪 Notion 风「高性价比人生指南」
+# 小红书账号：动物社会故事（当前路线见 docs/08-route.md）
 
 用一只简笔画猫，把[《高性价比人生指南》](https://github.com/eternity4719/HowToLiveBetter)里 665 条带证据分级的建议，做成小红书图文卡片，目标是可验证的变现。
 
@@ -21,6 +21,8 @@ python tools/render_cards.py content/posts/save-01.json      # → output/save-0
 | 路径 | 内容 |
 |---|---|
 | `docs/01-strategy.md` | 定位、变现分层、风险、20 篇实验。**先读这个** |
+| `docs/08-route.md` | **当前路线（唯一有效）**：决策表、来源优先流程、阶段关卡、未决事项 |
+| `content/animal/` | 故事卡模板与示范（AN-001，未完成） |
 | `docs/07-animal-direction-feasibility.md` | **动物社会故事方向的可行性分析**：结论、3 道上线前关卡、12 篇测试 |
 | `docs/06-positioning.md` | **当前定位与选材方向**（取代 01 的定位句），首批 10 个选题映射 |
 | `research/codex-benchmark-brief.md` | **给 Codex 的第二轮对标搜索任务单**（含搜索关键词、入样标准、安全约束） |

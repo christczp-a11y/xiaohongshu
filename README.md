@@ -21,6 +21,8 @@ python tools/render_cards.py content/posts/save-01.json      # → output/save-0
 | 路径 | 内容 |
 |---|---|
 | `docs/01-strategy.md` | 定位、变现分层、风险、20 篇实验。**先读这个** |
+| `docs/06-positioning.md` | **当前定位与选材方向**（取代 01 的定位句），首批 10 个选题映射 |
+| `research/account-analysis-2026-10-05.md` | Codex 对两个对标账号的拆解 |
 | `docs/02-competitor-research.md` | 用 xiaohongshu-mcp 做对标研究的 SOP |
 | `docs/03-content-system.md` | 选题 → 卡片 → 正文 → 发布前检查清单 |
 | `docs/04-visual-style.md` | 猫角色与 Notion 视觉规范 |

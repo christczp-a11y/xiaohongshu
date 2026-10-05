@@ -21,6 +21,14 @@ from render_cards import COST_TEXT  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 POOL = ROOT / "content" / "pool.json"
 TITLE_MAX = 20
+IMAGE_STYLE = """# 生图提示词（给 Codex CLI 等外部工具）
+
+**通用风格（每张都带上）**：一只简笔画猫，Notion 插画风：粗细均匀的黑色手绘线条（#37352f），白色填充，极简，
+不要阴影、不要渐变、不要背景、背景透明或纯白；正方形构图，主体居中偏下，留白充足。
+**图中不要出现任何文字、数字、水印**（中文由排版程序渲染）。
+**角色一致性**：每次都带同一张参考图（先定稿一张猫的标准图放在 content/art/reference.png），描述里固定：圆脸、尖耳朵、两侧各 2 根胡须、点眼睛、小三角鼻。
+
+> 用 AI 生成的图，发布时必须按平台规则主动标注 AI 生成。生成后在 content/posts/<slug>.json 的对应 cover/cards 里加 `"image": "content/art/<slug>/<id>.png"`，渲染器会自动改用它。"""
 MOOD_BY_TONE = {"r": "worry", "y": "think", "g": "happy", "b": "idea"}
 
 
@@ -106,6 +114,16 @@ def main() -> int:
     out = ROOT / "content" / "posts"
     out.mkdir(parents=True, exist_ok=True)
     (out / f"{args.slug}.json").write_text(json.dumps(post, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    # 给外部生图工具（如 Codex CLI）的提示词：只要角色/场景，文字一律不进图，
+    # 中文由 HTML 渲染，避免生图模型把汉字画成乱码。
+    mood_cn = {"happy": "开心眯眼", "worry": "担心皱眉", "think": "托腮思考", "idea": "想到好主意", "sleepy": "犯困"}
+    scenes = [("cover", post["cover"]["heading"], post["cover"]["mood"])] + [
+        (c["source_id"], c["heading"], c["mood"]) for c in post["cards"]]
+    prompts = IMAGE_STYLE + "\n\n" + "\n".join(
+        f"### {sid}\n场景：猫{mood_cn[m]}，与主题「{h[:30]}」相关的一个小道具。\n输出到：content/art/{args.slug}/{sid}.png\n"
+        for sid, h, m in scenes)
+    (out / f"{args.slug}.image_prompts.md").write_text(prompts, encoding="utf-8")
 
     srcs = "\n".join(f"- {e['id']}：{u}" for e in es for u in e["sources"][:2])
     cap = f"""# {args.title}

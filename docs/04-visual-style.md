@@ -27,3 +27,14 @@
 - 手绘质感不够？换成你自己画的 SVG 猫（Procreate/Figma 导出），替换 `cat_svg()` 返回值即可，其余流水线不变。
 - 想要更多姿势：在 `cat.py` 的 `_eyes/_mouth/_prop` 里加分支，或新增整身姿势函数。
 - 用 AI 生图保持角色一致很难（同一只猫换姿势就变脸），所以我选了代码绘制。如果要做贴纸/表情包，建议你手绘一套定稿再数字化。
+
+## 用 Codex CLI 生图（外部图覆盖猫）
+
+流水线两端已接好，中间那步你在本机跑：
+
+1. `make_post.py` 会同时写出 `content/posts/<slug>.image_prompts.md`：统一风格段 + 每张卡片的场景提示，图里**不含文字**（中文由排版渲染，避免生图模型把汉字画成乱码）。
+2. 在本机用 Codex CLI 按提示词出图，存到 `content/art/<slug>/<id>.png`（透明底或纯白底，正方形）。我没有在云端调用过 Codex（容器里没有它，也没有 API key），所以具体调用方式我没验证，按你本机 Codex 的用法来。
+3. 在 `content/posts/<slug>.json` 的 `cover` 或某张 `cards[i]` 里加 `"image": "content/art/<slug>/<id>.png"`，`render_cards.py` 会改用这张图；不加就用代码绘制的猫。路径写错会直接报错退出，不会静默回退。
+
+**角色一致性是最大风险**：生图模型换姿势容易换脸。先定稿一张标准猫 `content/art/reference.png`，每次生成都带上它；出图后人眼过一遍，不像的重来。
+**AI 生成的图发布时要主动标注 AI 生成**（国内版同样适用，见 `03-content-system.md`）。

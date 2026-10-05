@@ -9,6 +9,7 @@
 需要：pip install playwright（浏览器用本机已有的 Chromium/Chrome，见 docs/05-setup.md）。
 """
 import argparse
+import base64
 import html
 import json
 import os
@@ -67,6 +68,24 @@ ROUGH = """<svg width="0" height="0" style="position:absolute"><filter id="rough
 <feDisplacementMap in="SourceGraphic" in2="n" scale="5"/></filter></svg>"""
 
 
+def art(spec: dict, size: int, default_mood: str) -> str:
+    """主角图。spec["image"] 指向外部生成的图片（相对仓库根目录），没有就用代码绘制的猫。
+
+    图片用 data URI 内嵌，这样 HTML 挪到别处也能渲染。
+    """
+    img = spec.get("image")
+    if img:
+        f = (ROOT / img)
+        if not f.exists():
+            raise SystemExit(f"找不到图片 {img}（来自 {spec.get('heading', 'cover')}）")
+        mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}[
+            f.suffix.lstrip(".").lower()]
+        b64 = base64.b64encode(f.read_bytes()).decode()
+        return (f'<img class="cat" src="data:{mime};base64,{b64}" '
+                f'style="width:{size}px;height:{size}px;object-fit:contain">')
+    return cat_svg(spec.get("mood", default_mood), spec.get("accent", "yellow"), size)
+
+
 def esc(s) -> str:
     return html.escape(str(s), quote=False)
 
@@ -100,7 +119,7 @@ def cover(post: dict, attribution: str) -> str:
 <div class="sub">{esc(c.get('sub', ''))}</div>
 <div class="tags">{pills(c.get('chips', []), 'y')}</div>
 <div class="props">{props}</div>
-{cat_svg(c.get('mood', 'happy'), c.get('accent', 'yellow'), 470)}
+{art(c, 470, 'happy')}
 <div class="foot">{esc(attribution)}</div>""", "cover")
 
 
@@ -118,7 +137,7 @@ def card(post: dict, cd: dict, idx: int, total: int, attribution: str) -> str:
 <div class="callout {tone}"><span class="ico">{esc(cd.get('icon', '💡'))}</span>
 <span style="font-size:{fit(body, 46, 38, 60, 130)}px">{esc(body)}</span></div>
 <div class="props">{props}</div>
-{cat_svg(cd.get('mood', 'think'), cd.get('accent', 'yellow'), 360)}
+{art(cd, 360, 'think')}
 <div class="foot">{esc(attribution)}</div>""", "card")
 
 

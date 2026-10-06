@@ -82,7 +82,7 @@
 
 Chris 认可 v3.2 图集（"就这吧"），存档 `/mnt/project-files/cat-card/sheet-v3-approved/`（原图 + `poses/` 裁好的 16 个透明底单图，编号 01–12 为猫姿势，13–16 为道具：手、空白挂牌、软垫、地面线）。首篇《我是猫，不想去的地方我就不去》（封面 + 5 页）的排版规格在 `content/cards/cat-01-post/*.json`，成图在 `/mnt/project-files/cat-card/post-01-v4/`（v3 版用毛笔书法字体，Chris 评"土"，已被 v4 取代）。
 
-重排命令：`python3 tools/compose_card.py content/cards/cat-01-post/01-jinri-dayang.json out.png --poses-dir /mnt/project-files/cat-card/sheet-v3-approved/poses`
+重排命令：`python3 tools/compose_card.py content/cards/cat-01-post/01-jinri-dayang.json out.png --poses-dir /mnt/project-files/cat-card/sheet-v4-ink/poses`
 
 已知局限：图集每个姿势只有约 200–400px 宽，卡片里放大到约 1.5 倍，线条略软；需要更锐时请 Codex 出更大尺寸的图集。
 
@@ -95,3 +95,11 @@ Chris 认可 v3.2 图集（"就这吧"），存档 `/mnt/project-files/cat-card/
 - 每个字单独画：轻微旋转、上下错位、大小差，模拟手写；字距加宽到 0.16–0.18em；全角标点只占半格；破折号画成一笔横线。
 - 标题墨高约 8% 页宽、正文约 4%，行距 84px；英文默认放在正文后面空一行（`en_pos` 可选 under / inline）。
 - 剩下的差距：仍是字体，不是真手写。要再进一步，只能由 Chris 手写标题拍照，由脚本抠字叠上去。
+
+## 图集 v4（墨线版）与字体 v5（2026-10-06）
+
+- Chris 传来新图集（同样 16 格、同样编号，线条改成有轻重的墨笔线，去掉了粉耳），存档 `/mnt/project-files/cat-card/sheet-v4-ink/`（`sheet-v4.png` + `poses/`）。首篇改用这一版。
+- 字体：Chris 要"和参考笔记一模一样"。参考的字体云端识别不了（识别网站连不上）；在 npm「中文网字计划」（@chinese-fonts/*，约 80 款）里逐款比对，没有同款，Chris 选了最接近的**平方萌萌哒**（`@chinese-fonts/pfmmd`，分片 woff2 放在 `/mnt/project-files/cat-card/fonts/pfmmd/`，脚本按 `result.css` 的 unicode-range 取字）。
+- 授权：字体文件只写"版权平方造字中心所有"，没有附许可条款；被收进中文网字计划只是线索，不等于可商用。Chris 的决定：没有收入的阶段先用；**开始变现前必须向平方造字确认授权，或换字**。
+- 平方萌萌哒的字宽不均、个别字（如"想"）带游离墨点，所以 `compose_card.py` 改为按墨迹宽度排字距，并去掉面积很小的游离连通块。
+- 成图：`/mnt/project-files/cat-card/post-01-v5/`；文案 v7 见 `content/posts/cat-voice-v7.md`。

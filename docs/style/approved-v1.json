@@ -1,0 +1,47 @@
+{
+  "image_px": [
+    548,
+    724
+  ],
+  "frame_px": {
+    "top": 37,
+    "bottom": 690,
+    "left": 32,
+    "right": 518
+  },
+  "paper_rgb_median": [
+    250,
+    247,
+    241
+  ],
+  "paper_texture_noise_std": 1.63,
+  "outer_margin_rgb_median": [
+    254,
+    254,
+    254
+  ],
+  "outer_margin_px": {
+    "top": 37,
+    "bottom": 34,
+    "left": 32,
+    "right": 30
+  },
+  "ink_darkest_1pct_gray": 41,
+  "frame_top_jitter_pct_of_paper_w": 0.366,
+  "frame_line_width_pct_of_paper_w": 0.617,
+  "cat_bbox_pct_of_paper": {
+    "width": 26.3,
+    "height": 30.0,
+    "left_from_paper_left": 0.4,
+    "top_from_paper_top": -2.0
+  },
+  "cat_bbox_aspect_h_over_w": 1.53,
+  "cat_line_width_pct_of_paper_w": {
+    "mean": 0.841,
+    "std": 0.123,
+    "p10": 0.823,
+    "p90": 0.92
+  },
+  "whitespace_block_ratio": 0.952,
+  "ink_pixel_ratio_in_paper": 0.0107
+}

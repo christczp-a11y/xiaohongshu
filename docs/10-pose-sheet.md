@@ -80,8 +80,18 @@
 
 ## 已定稿图集与首篇（2026-10-06）
 
-Chris 认可 v3.2 图集（"就这吧"），存档 `/mnt/project-files/cat-card/sheet-v3-approved/`（原图 + `poses/` 裁好的 16 个透明底单图，编号 01–12 为猫姿势，13–16 为道具：手、空白挂牌、软垫、地面线）。首篇《我是猫，不想去的地方我就不去》（封面 + 5 页）的排版规格在 `content/cards/cat-01-post/*.json`，成图在 `/mnt/project-files/cat-card/post-01-v3/`。
+Chris 认可 v3.2 图集（"就这吧"），存档 `/mnt/project-files/cat-card/sheet-v3-approved/`（原图 + `poses/` 裁好的 16 个透明底单图，编号 01–12 为猫姿势，13–16 为道具：手、空白挂牌、软垫、地面线）。首篇《我是猫，不想去的地方我就不去》（封面 + 5 页）的排版规格在 `content/cards/cat-01-post/*.json`，成图在 `/mnt/project-files/cat-card/post-01-v4/`（v3 版用毛笔书法字体，Chris 评"土"，已被 v4 取代）。
 
 重排命令：`python3 tools/compose_card.py content/cards/cat-01-post/01-jinri-dayang.json out.png --poses-dir /mnt/project-files/cat-card/sheet-v3-approved/poses`
 
 已知局限：图集每个姿势只有约 200–400px 宽，卡片里放大到约 1.5 倍，线条略软；需要更锐时请 Codex 出更大尺寸的图集。
+
+## 字体与排版 v4（2026-10-06，Chris："好土啊你的字和排版"）
+
+原因（和参考笔记并排比）：v3 用马善政/龙藏体是毛笔书法字，参考是单线马克笔手写；正文加了描边更粗；英文贴在标题下太挤；全角逗号占满一格，字句中间出现空洞。
+
+改法（`tools/compose_card.py`）：
+- 中文统一用霞鹜漫黑 LXGW Marker Gothic（OFL，单线马克笔感；同类候选 Iansui、Huninn、Klee One、Zen Kurenaido 缺本篇 21–30 个字）。英文用 Patrick Hand（OFL）。
+- 每个字单独画：轻微旋转、上下错位、大小差，模拟手写；字距加宽到 0.16–0.18em；全角标点只占半格；破折号画成一笔横线。
+- 标题墨高约 8% 页宽、正文约 4%，行距 84px；英文默认放在正文后面空一行（`en_pos` 可选 under / inline）。
+- 剩下的差距：仍是字体，不是真手写。要再进一步，只能由 Chris 手写标题拍照，由脚本抠字叠上去。

@@ -7,7 +7,9 @@
 {"title": "今日打烊", "en": "Closed Today",
  "lines": ["有人伸手，想摸我。", "", "今天的我，已经打烊了。"],
  "pose": "pose-04.png", "anchor": "br", "pose_h": 0.32, "ground": true}
-- lines 里的空串 = 空一行；pose 省略则只排文字；anchor 取 br / bl / bc
+- lines 里的空串 = 空一行；poses 省略则只排文字；也可用旧写法 pose + anchor（br / bl / bc）
+- poses: [{"file":"pose-07.png","x":0.5,"w":0.38,"bottom":0.86}, ...]，x 为左缘占页宽，w 为宽占页宽，bottom 为底缘占页高
+- ground: {"y":0.86,"x0":0.1,"x1":0.9} 画一条手抖地面线；footer: 页底小字
 - cover: true 时是封面版式（标题居中放大，姿势居中偏下）
 依赖：pillow。字体默认放在 /mnt/project-files/cat-card/fonts/ （不入仓库，OFL 许可，商用前核对各自 OFL.txt）。
 排版数值来自对参考笔记的实测（research/ref-note-cat-zen-2026-10-06.md）：左边距约 15%，
@@ -29,8 +31,8 @@ BODY_FONT = "LongCang-Regular.ttf"
 LATIN_FONT = "CaveatBrush-Regular.ttf"
 
 LEFT = int(W * 0.15)
-BODY_SIZE = 56
-BODY_PITCH = 82
+BODY_SIZE = 60
+BODY_PITCH = 86
 TITLE_SIZE = 124
 
 
@@ -64,7 +66,7 @@ def compose(spec, out, poses_dir=""):
         for l in spec.get("lines", []):
             if l:
                 lw = d.textlength(l, font=bf)
-                d.text(((W - lw) / 2, y), l, font=bf, fill=INK)
+                d.text(((W - lw) / 2, y), l, font=bf, fill=INK, stroke_width=1, stroke_fill=INK)
             y += BODY_PITCH if l else 40
     else:
         d.text((LEFT, 118), spec["title"], font=tf, fill=INK)
@@ -75,27 +77,35 @@ def compose(spec, out, poses_dir=""):
         y = ty + 56
         for l in spec.get("lines", []):
             if l:
-                d.text((LEFT, y), l, font=bf, fill=INK)
+                d.text((LEFT, y), l, font=bf, fill=INK, stroke_width=1, stroke_fill=INK)
                 y += BODY_PITCH
             else:
                 y += 44
 
-    if spec.get("pose"):
-        p = spec["pose"]
-        pose = Image.open(p if os.path.isabs(p) else os.path.join(poses_dir, p)).convert("RGBA")
-        ph = int(H * spec.get("pose_h", 0.32))
-        pw = int(pose.width * ph / pose.height)
-        pose = pose.resize((pw, ph), Image.LANCZOS)
-        bottom = int(H * 0.88)
-        anchor = spec.get("anchor", "br")
-        x = {"br": W - int(W * 0.10) - pw, "bl": LEFT - 10, "bc": (W - pw) // 2}[anchor]
-        y = bottom - ph
-        if spec.get("ground"):
-            gy = bottom - int(ph * spec.get("ground_at", 0.04))
-            ground_line(d, int(W * 0.10), W - int(W * 0.10), gy)
+    # 姿势/道具：可放多个。{"file","x"(左缘占页宽),"w"(宽占页宽),"bottom"(底缘占页高)}
+    items = list(spec.get("poses", []))
+    if spec.get("pose"):  # 旧写法：单个姿势 + anchor
+        items.append({"file": spec["pose"], "w": spec.get("pose_w", 0.3), "bottom": 0.88,
+                      "x": {"br": 0.60, "bl": 0.10, "bc": 0.35}[spec.get("anchor", "br")]})
+    if spec.get("ground"):
+        g = spec["ground"]
+        ground_line(d, int(W * g.get("x0", 0.10)), int(W * g.get("x1", 0.90)), int(H * g["y"]), seed=g.get("seed", 7))
+    if items:
         im = im.convert("RGBA")
-        im.alpha_composite(pose, (x, y))
+        for it in items:
+            f = it["file"]
+            pose = Image.open(f if os.path.isabs(f) else os.path.join(poses_dir, f)).convert("RGBA")
+            pw = int(W * it["w"])
+            ph = int(pose.height * pw / pose.width)
+            pose = pose.resize((pw, ph), Image.LANCZOS)
+            x = int(W * it["x"]) if it.get("x") is not None else (W - pw) // 2
+            im.alpha_composite(pose, (x, int(H * it["bottom"]) - ph))
         im = im.convert("RGB")
+        d = ImageDraw.Draw(im)
+    if spec.get("footer"):
+        ff = ImageFont.truetype(FONTS + BODY_FONT, 34)
+        fw = d.textlength(spec["footer"], font=ff)
+        d.text(((W - fw) / 2, int(H * 0.93)), spec["footer"], font=ff, fill=(120, 108, 100))
     im.save(out)
     return out
 

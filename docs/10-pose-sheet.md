@@ -77,3 +77,11 @@
 - 出图后先看 `contact.png`（脚本输出的带编号总览），确认编号对应、没有姿势被切碎，再用。v1 图集的实测：默认合并间距 14 会把相邻姿势粘成一块，已把脚本默认改为 6；间距太小时请让 Codex 重出，不要靠脚本硬拆。
 - 同一只猫能否跨 12 个姿势保持一致，是 AI 出图最容易失败的地方：如果脸型、围巾结、花色位置前后不一，只在这一页重出，别换提示词。
 - 画风由蜡笔改为钢笔线 + 平涂，是 Chris 2026-10-06 的决定；银渐层的 5 个特征沿用"风格定稿 v2"，其中"圆胖面包形身体"一条已作废。
+
+## 已定稿图集与首篇（2026-10-06）
+
+Chris 认可 v3.2 图集（"就这吧"），存档 `/mnt/project-files/cat-card/sheet-v3-approved/`（原图 + `poses/` 裁好的 16 个透明底单图，编号 01–12 为猫姿势，13–16 为道具：手、空白挂牌、软垫、地面线）。首篇《我是猫，不想去的地方我就不去》（封面 + 5 页）的排版规格在 `content/cards/cat-01-post/*.json`，成图在 `/mnt/project-files/cat-card/post-01-v3/`。
+
+重排命令：`python3 tools/compose_card.py content/cards/cat-01-post/01-jinri-dayang.json out.png --poses-dir /mnt/project-files/cat-card/sheet-v3-approved/poses`
+
+已知局限：图集每个姿势只有约 200–400px 宽，卡片里放大到约 1.5 倍，线条略软；需要更锐时请 Codex 出更大尺寸的图集。

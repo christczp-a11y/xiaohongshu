@@ -1,7 +1,7 @@
 """把 AI 出的"姿势图集"裁成一个个带透明底的单图。
 
 用法：
-  python3 tools/cut_sheet.py <图集.png> <输出目录> [--min-area 0.002] [--gap 14]
+  python3 tools/cut_sheet.py <图集.png> <输出目录> [--min-area 0.0004] [--gap 6]
 
 图集要求：纯平底色，每个姿势之间有空白，互相不相连。脚本按"和底色不同的像素"找连通块，
 按从上到下、从左到右的顺序编号 pose-01.png、pose-02.png……，并输出 contact.png（带编号的总览），
@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw
 from scipy import ndimage as ndi
 
 
-def cut(path, out_dir, min_area=0.002, gap=14):
+def cut(path, out_dir, min_area=0.0004, gap=6):
     im = Image.open(path).convert("RGB")
     a = np.asarray(im).astype(float)
     h, w = a.shape[:2]
@@ -74,8 +74,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("sheet")
     ap.add_argument("out_dir")
-    ap.add_argument("--min-area", type=float, default=0.002)
-    ap.add_argument("--gap", type=int, default=14)
+    ap.add_argument("--min-area", type=float, default=0.0004)
+    ap.add_argument("--gap", type=int, default=6)
     args = ap.parse_args()
     for name, w, h in cut(args.sheet, args.out_dir, args.min_area, args.gap):
         print(name, w, "x", h)

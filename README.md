@@ -5,9 +5,9 @@
 > 当前路线见 [`docs/08-route.md`](docs/08-route.md)（唯一有效）；工作规则见 [`CLAUDE.md`](CLAUDE.md)。
 
 ## 现在处于哪一步
-**P0：文字阶段，还没有发布任何一篇。** 现有文字样稿：
-- [`content/posts/cat-voice-v4.md`](content/posts/cat-voice-v4.md)：猫的口吻，《我是猫，不想去的地方我就不去》
-- [`content/posts/turtle-voice-v5.md`](content/posts/turtle-voice-v5.md)：乌龟的口吻，《今天只做了一件事，也算一天》
+**P0：文字阶段，还没有发布任何一篇。** 现有文字样稿（v6，文风「接住情绪」）：
+- [`content/posts/cat-voice-v6.md`](content/posts/cat-voice-v6.md)：猫的口吻，《我是猫，不想去的地方我就不去》
+- [`content/posts/turtle-voice-v6.md`](content/posts/turtle-voice-v6.md)：乌龟的口吻，《今天只做了一件事，也算一天》
 
 图片要等 P1 关卡（在本机用 Codex 出图），目前稿子里只有出图提示词。
 
@@ -35,7 +35,7 @@
 | 项 | 状态 |
 |---|---|
 | 路线与规则 | 已定（`docs/08-route.md`） |
-| 文字样稿 | v4（猫）、v5（乌龟），**待用户反馈** |
+| 文字样稿 | v6（猫、乌龟），**待用户反馈与真实细节确认** |
 | 文风样例 | 待用户提供 |
 | 猫头像 | 待用户试画 |
 | 出图 | 未开始（P1 关卡） |

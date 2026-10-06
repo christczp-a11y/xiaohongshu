@@ -4,7 +4,7 @@ Chris（温哥华）的个人账号项目。**当前路线见 `docs/08-route.md`
 沟通按 Chris 的偏好：中文、简洁、给真实判断、不确定就说不确定，不要编。
 
 ## 当前阶段
-**P0：文字阶段。** 样稿：`content/posts/cat-voice-v4.md`（猫）、`content/posts/turtle-voice-v5.md`（乌龟）。**正式出图（AI 出图，Codex 在用户本机）要等 P1 关卡，由 Chris 明确启动**；在此之前稿子里只写出图提示词，不生成图片。
+**P0：文字阶段。** 样稿：`content/posts/cat-voice-v6.md`（猫）、`content/posts/turtle-voice-v6.md`（乌龟），文风「接住情绪」（见 08-route）；v4、v5 已归档。**正式出图（AI 出图，Codex 在用户本机）要等 P1 关卡，由 Chris 明确启动**；在此之前稿子里只写出图提示词，不生成图片。
 旧样稿（含代码绘制的铅笔占位图 `tools/sketch.py`，不是 AI 生图）在 `content/posts/archive/`，未发布。已作废文档在 `docs/archive/`。
 
 ## 通用硬规则（所有路线）

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """把 content/posts/<slug>.json（sketch 格式）渲染成 1080x1440 的铅笔简笔画图文卡片。
 
-    python tools/render_sketch.py content/posts/cat-slow-blink.json
+    python tools/render_sketch.py content/posts/archive/cat-slow-blink.json
 
 输出 output/<slug>/NN.png。页面类型：cover / 研究 / 我说 / 给你 / sources。
 三层标签（研究 / 我说 / 给你）直接露给读者，让读者知道哪句是事实、哪句是叙述、哪句是邀请。

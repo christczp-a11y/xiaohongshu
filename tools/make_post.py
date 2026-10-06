@@ -128,7 +128,7 @@ def main() -> int:
     srcs = "\n".join(f"- {e['id']}：{u}" for e in es for u in e["sources"][:2])
     cap = f"""# {args.title}
 
-> 草稿。发布前逐项过 docs/03-content-system.md 的「发布前检查」。
+> 草稿。发布前逐项过 docs/archive/03-content-system.md 的「发布前检查」。
 
 ## 正文（≤1000 字，目前只有骨架，请用自己的话写开头和结尾）
 

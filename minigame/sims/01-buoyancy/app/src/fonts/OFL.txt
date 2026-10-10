@@ -1,5 +1,4 @@
-Copyright (c) 2022--2024, atelierAnchor <https://atelier-anchor.com>,
-with Reserved Font Name <Smiley> and <得意黑>.
+Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

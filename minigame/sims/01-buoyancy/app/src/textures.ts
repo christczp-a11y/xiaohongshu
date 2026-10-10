@@ -2,7 +2,6 @@ import * as THREE from 'three';
 
 // Every texture is drawn at startup, so the package ships no image files.
 
-export const TITLE_FONT = 'LabTitle';
 export const SANS = '-apple-system, "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Noto Sans SC", "Microsoft YaHei", sans-serif';
 
 function canvas(w: number, h: number) {
@@ -56,49 +55,31 @@ function valueNoise(seed: number) {
   };
 }
 
-/**
- * Oiled walnut, grain running along u. The canvas covers `cmU` × `cmV`
- * centimetres, so callers set repeat = 1/cm and offset = 0.5.
- */
-export function walnut(cmU = 48, cmV = 30, ppc = 21): THREE.CanvasTexture {
-  const W = Math.round(cmU * ppc);
-  const H = Math.round(cmV * ppc);
-  const [c, g] = canvas(W, H);
-  const img = g.createImageData(W, H);
-  const d = img.data;
+/** Light maple for the wooden block: fine grain running along u, one face per texture. */
+export function maple(size = 512): THREE.CanvasTexture {
+  const [c, g] = canvas(size, size);
+  const img = g.createImageData(size, size);
   const n1 = valueNoise(11);
   const n2 = valueNoise(23);
   const n3 = valueNoise(37);
-  for (let y = 0; y < H; y++) {
-    const v = y / ppc;
-    for (let x = 0; x < W; x++) {
-      const u = x / ppc;
-      const warp = n1(u * 0.06, v * 0.22) * 7 + n2(u * 0.25, v * 0.9) * 1.1;
-      const ring = v * 1.25 + warp;
+  for (let y = 0; y < size; y++) {
+    const v = (y / size) * 4.5; // the face is 4.5 cm
+    for (let x = 0; x < size; x++) {
+      const u = (x / size) * 4.5;
+      const ring = v * 3.2 + n1(u * 0.3, v * 1.2) * 2.2 + n2(u * 1.4, v * 3) * 0.3;
       const f = ring - Math.floor(ring);
-      const late = Math.pow(Math.max(0, Math.sin(f * Math.PI)), 10); // dark latewood band
-      const pores = n3(u * 0.7, v * 46) * n3(u * 2.1, v * 90);
-      const tone = n2(u * 0.04 + 9, v * 0.05);
-      let r = 78 + tone * 34;
-      let gg = 50 + tone * 22;
-      let b = 32 + tone * 14;
-      const k = 1 - late * 0.42 - pores * 0.22;
-      r *= k;
-      gg *= k;
-      b *= k;
-      const i = (y * W + x) * 4;
-      d[i] = r;
-      d[i + 1] = gg;
-      d[i + 2] = b;
-      d[i + 3] = 255;
+      const late = Math.pow(Math.max(0, Math.sin(f * Math.PI)), 12);
+      const pores = n3(u * 2, v * 60) * 0.5;
+      const k = 1 - late * 0.22 - pores * 0.08;
+      const i = (y * size + x) * 4;
+      img.data[i] = 222 * k;
+      img.data[i + 1] = 190 * k;
+      img.data[i + 2] = 146 * k;
+      img.data[i + 3] = 255;
     }
   }
   g.putImageData(img, 0, 0);
-  const t = toTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(1 / cmU, 1 / cmV);
-  t.offset.set(0.5, 0.5);
-  return t;
+  return toTexture(c);
 }
 
 /** Fine speckle for painted cast iron (used as a bump map). */
@@ -177,34 +158,32 @@ export function dialPlate(s: DialSpec): THREE.CanvasTexture {
   const W = Math.round(s.width * ppc);
   const H = Math.round(s.height * ppc);
   const [c, g] = canvas(W, H);
-  g.fillStyle = '#f1ede0';
+  g.fillStyle = '#f7f7f5';
   g.fillRect(0, 0, W, H);
   const rnd = rng(17);
-  for (let i = 0; i < 2600; i++) {
-    g.fillStyle = `rgba(90,80,60,${rnd() * 0.05})`;
+  for (let i = 0; i < 1800; i++) {
+    g.fillStyle = `rgba(60,60,60,${rnd() * 0.035})`;
     g.fillRect(rnd() * W, rnd() * H, 1 + rnd() * 2, 1 + rnd() * 2);
   }
   const yOf = (v: number) => (s.top - (s.p0 - v * s.k)) * ppc;
   const cx = W / 2;
   const slot = 0.62 * ppc;
   const y0 = yOf(0);
-  const y5 = yOf(s.max);
+  const yMax = yOf(s.max);
   // the slot the spring and pointer ride in
-  g.fillStyle = '#1e2324';
-  roundRect(g, cx - slot / 2, y0 - 1.1 * ppc, slot, y5 - y0 + 2.2 * ppc, slot / 2);
+  g.fillStyle = '#26272a';
+  roundRect(g, cx - slot / 2, y0 - 1.1 * ppc, slot, yMax - y0 + 2.2 * ppc, slot / 2);
   g.fill();
-  g.strokeStyle = 'rgba(0,0,0,0.25)';
-  g.lineWidth = 3;
-  g.stroke();
-  // ticks every 0.2 N on both sides, longer every 1 N
-  g.strokeStyle = '#1d2426';
-  g.fillStyle = '#1d2426';
+  // ticks every 0.2 N on both sides, longer every 0.5 N and 1 N
+  g.strokeStyle = '#1d1d1f';
+  g.fillStyle = '#1d1d1f';
   const steps = Math.round(s.max / 0.2);
   for (let j = 0; j <= steps; j++) {
     const y = yOf(j * 0.2);
-    const major = j % 5 === 0;
-    const len = (major ? 0.95 : 0.5) * ppc;
-    g.lineWidth = major ? 5 : 3;
+    const whole = j % 5 === 0;
+    const half = !whole && (j * 0.2) % 0.5 < 1e-6;
+    const len = (whole ? 0.95 : half ? 0.7 : 0.45) * ppc;
+    g.lineWidth = whole ? 4.5 : 2.5;
     const gap = slot / 2 + 0.12 * ppc;
     g.beginPath();
     g.moveTo(cx - gap, y);
@@ -213,72 +192,32 @@ export function dialPlate(s: DialSpec): THREE.CanvasTexture {
     g.lineTo(cx + gap + len, y);
     g.stroke();
   }
-  g.font = `700 ${Math.round(0.62 * ppc)}px ${SANS}`;
+  g.font = `600 ${Math.round(0.5 * ppc)}px ${SANS}`;
   g.textBaseline = 'middle';
   g.textAlign = 'right';
   for (let v = 0; v <= s.max; v++) g.fillText(String(v), cx - slot / 2 - 1.15 * ppc, yOf(v) + 2);
   g.textAlign = 'left';
   for (let v = 0; v <= s.max; v++) g.fillText(String(v), cx + slot / 2 + 1.15 * ppc, yOf(v) + 2);
-  g.font = `700 ${Math.round(0.5 * ppc)}px ${SANS}`;
+  g.font = `600 ${Math.round(0.45 * ppc)}px ${SANS}`;
   g.textAlign = 'center';
-  g.fillText('N', cx, y5 + 1.6 * ppc);
+  g.fillText('N', cx, yMax + 1.6 * ppc);
   return toTexture(c);
 }
 
-/** Engraved brass label for the front of the display base. */
-export function nameplate(widthCm: number, heightCm: number, title: string, sub: string): THREE.CanvasTexture {
-  const ppc = 90;
-  const W = Math.round(widthCm * ppc);
-  const H = Math.round(heightCm * ppc);
-  const [c, g] = canvas(W, H);
-  const grad = g.createLinearGradient(0, 0, W, H);
-  grad.addColorStop(0, '#d9b46a');
-  grad.addColorStop(0.5, '#c79f55');
-  grad.addColorStop(1, '#b88e48');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, W, H);
-  const rnd = rng(29);
-  for (let i = 0; i < 900; i++) {
-    g.strokeStyle = `rgba(${rnd() < 0.5 ? '255,240,200' : '90,60,20'},${rnd() * 0.08})`;
-    g.lineWidth = 1;
-    const y = rnd() * H;
-    g.beginPath();
-    g.moveTo(0, y);
-    g.lineTo(W, y + (rnd() - 0.5) * 3);
-    g.stroke();
-  }
-  g.strokeStyle = 'rgba(70,45,15,0.55)';
-  g.lineWidth = 3;
-  g.strokeRect(0.18 * ppc, 0.18 * ppc, W - 0.36 * ppc, H - 0.36 * ppc);
-  const engrave = (text: string, font: string, x: number, y: number, align: CanvasTextAlign) => {
-    g.font = font;
-    g.textAlign = align;
-    g.textBaseline = 'middle';
-    g.fillStyle = 'rgba(255,236,190,0.55)';
-    g.fillText(text, x + 1.5, y + 1.5);
-    g.fillStyle = '#3a2a12';
-    g.fillText(text, x, y);
-  };
-  engrave(title, `${Math.round(0.95 * ppc)}px ${TITLE_FONT}, ${SANS}`, W * 0.5, H * 0.43, 'center');
-  g.letterSpacing = `${Math.round(0.12 * ppc)}px`;
-  engrave(sub, `600 ${Math.round(0.3 * ppc)}px ${SANS}`, W * 0.5, H * 0.8, 'center');
-  return toTexture(c);
-}
-
-/** White enamel graduations for a beaker, 0 at the inner floor. */
+/** Printed graduations for a beaker, 0 at the inner floor. */
 export function beakerMarks(heightCm: number, mlPerCm: number, maxMl: number): THREE.CanvasTexture {
   const ppc = 128;
   const W = 256;
   const H = Math.round(heightCm * ppc);
   const [c, g] = canvas(W, H);
-  g.strokeStyle = '#ffffff';
-  g.fillStyle = '#ffffff';
+  g.strokeStyle = '#2a2a2c';
+  g.fillStyle = '#2a2a2c';
   g.font = `600 ${Math.round(0.42 * ppc)}px ${SANS}`;
   g.textBaseline = 'middle';
   for (let ml = 50; ml <= maxMl; ml += 50) {
     const y = H - (ml / mlPerCm) * ppc;
     const major = ml % 100 === 0;
-    g.lineWidth = 5;
+    g.lineWidth = 4;
     g.beginPath();
     g.moveTo(40, y);
     g.lineTo(major ? 150 : 110, y);

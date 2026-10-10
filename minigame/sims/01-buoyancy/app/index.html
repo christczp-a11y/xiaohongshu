@@ -7,21 +7,21 @@
 <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
-<main id="app">
+<main id="app" data-mode="weigh">
   <canvas id="c"></canvas>
 
   <header class="top">
     <div class="brand">
+      <div class="kicker"><span>BUOYANCY LAB</span><span>01</span></div>
       <h1 class="title">浮力实验室</h1>
-      <div class="kicker">BUOYANCY LAB · 01</div>
     </div>
-    <button class="round" id="aboutBtn" aria-label="关于">?</button>
+    <button class="round key" id="aboutBtn" aria-label="关于">?</button>
   </header>
 
   <nav class="tabs" id="tabs" role="tablist">
-    <button class="tab on" role="tab" aria-selected="true">称一称</button>
-    <button class="tab" role="tab" disabled title="制作中">变一变<i class="lock"></i></button>
-    <button class="tab" role="tab" disabled title="制作中">浮还是沉<i class="lock"></i></button>
+    <button class="key on" role="tab" data-mode="weigh" aria-selected="true"><small>01</small>称一称</button>
+    <button class="key" role="tab" data-mode="vary" aria-selected="false"><small>02</small>变一变</button>
+    <button class="key" role="tab" data-mode="float" aria-selected="false"><small>03</small>浮还是沉</button>
   </nav>
 
   <figure class="inset" id="inset">
@@ -31,39 +31,85 @@
   <div class="tag g" id="lblG">G</div>
   <div class="tag b" id="lblB">F浮</div>
   <div class="tag t" id="lblT">F拉</div>
+  <div class="tag t" id="lblN">F支</div>
+  <div class="tag cup" id="lblCup">水</div>
 
-  <div class="hint" id="hint"><span class="hand">↕</span>上下拖动，把铝块放进水里</div>
+  <div class="hint" id="hint"><span class="hand">↕</span><span id="hintText">上下拖动，把铝块放进水里</span></div>
 
-  <button class="chip" id="arrowToggle" aria-pressed="true">受力分析<span class="sw"></span></button>
+  <button class="chip key" id="arrowToggle" aria-pressed="true">受力分析<span class="sw"></span></button>
 
   <section class="dock" id="dock">
     <div class="card">
-      <div class="guide"><b class="step" id="stepNo">1</b><span id="stepText">先读测力计：铝块在空气中有多重？</span></div>
-      <div class="meters">
-        <div class="m"><span class="k"><i class="dot g"></i>物重 G</span><b id="vG">3.31</b></div>
-        <div class="m"><span class="k"><i class="dot t"></i>示数 F拉</span><b id="vF">3.31</b></div>
-        <div class="m"><span class="k"><i class="dot b"></i>浮力 F浮</span><b id="vB">0.00</b></div>
-        <div class="m"><span class="k"><i class="dot w"></i>溢出水重 G排</span><b id="vP">0.00</b></div>
+      <!-- 称一称 -->
+      <div class="panel" data-for="weigh">
+        <div class="guide"><b class="step" id="stepNo">1</b><span id="stepText">先读测力计：铝块在空气中有多重？</span></div>
+        <div class="meters">
+          <div class="m"><span class="k"><i class="dot g"></i>物重 G</span><b id="vG">0.00</b></div>
+          <div class="m"><span class="k"><i class="dot t"></i>示数 F拉</span><b id="vF">0.00</b></div>
+          <div class="m"><span class="k"><i class="dot b"></i>浮力 F浮</span><b id="vB">0.00</b></div>
+          <div class="m"><span class="k"><i class="dot w"></i>溢出水重 G排</span><b id="vP">0.00</b></div>
+        </div>
+        <div class="formula">单位 N　　F浮 = G − F拉</div>
+        <div class="eq" id="eqrow"><b>F浮</b><span class="sign" id="eqSign">?</span><b>G排</b><em id="eqNote">把铝块放进水里看看</em></div>
+        <div class="actions">
+          <button class="btn key" id="reset">重做</button>
+          <button class="btn key primary" id="record">记录这组数据</button>
+        </div>
       </div>
-      <div class="formula">单位 N　　F浮 = G − F拉</div>
-      <div class="eq" id="eqrow"><b>F浮</b><span class="sign" id="eqSign">?</span><b>G排</b><em id="eqNote">把铝块放进水里看看</em></div>
-      <div class="actions">
-        <button class="btn ghost" id="reset">↺ 重做</button>
-        <button class="btn primary" id="record">记录这组数据</button>
+
+      <!-- 变一变 -->
+      <div class="panel" data-for="vary" hidden>
+        <div class="guide"><i class="step dotted"></i><span id="varyText">往下拖，把铝块放进水里</span></div>
+        <div class="picks">
+          <div class="pick"><span class="lbl">液体</span><div class="seg sm" id="varyLiquid"></div></div>
+          <div class="pick"><span class="lbl">物块</span><div class="seg sm" id="varySolid"></div></div>
+        </div>
+        <div class="meters">
+          <div class="m"><span class="k"><i class="dot g"></i>物重 G</span><b id="yG">0.00</b></div>
+          <div class="m"><span class="k"><i class="dot t"></i>示数 F拉</span><b id="yF">0.00</b></div>
+          <div class="m"><span class="k"><i class="dot b"></i>浮力 F浮</span><b id="yB">0.00</b></div>
+          <div class="m"><span class="k">浸入深度 h</span><b id="yH">0.0</b></div>
+        </div>
+        <div class="chart">
+          <div class="chart-head"><span>F浮 随浸入深度 h 的变化</span><button class="key" id="clearChart">清空</button></div>
+          <canvas id="chart"></canvas>
+        </div>
+      </div>
+
+      <!-- 浮还是沉 -->
+      <div class="panel" data-for="float" hidden>
+        <div class="guide"><i class="step dotted"></i><span id="floatText">猜一猜：松手后它会浮起来，还是沉下去？</span></div>
+        <div class="picks">
+          <div class="pick wide"><span class="lbl">物块</span><div class="seg sm" id="floatSolid"></div></div>
+          <div class="pick"><span class="lbl">液体</span><div class="seg sm" id="floatLiquid"></div></div>
+        </div>
+        <div class="meters">
+          <div class="m"><span class="k">物块 ρ物</span><b id="zRs">0.5</b></div>
+          <div class="m"><span class="k">液体 ρ液</span><b id="zRl">1.0</b></div>
+          <div class="m"><span class="k"><i class="dot g"></i>物重 G</span><b id="zG">0.00</b></div>
+          <div class="m"><span class="k"><i class="dot b"></i>浮力 F浮</span><b id="zB">0.00</b></div>
+        </div>
+        <div class="formula">密度单位 ×10³ kg/m³　　力的单位 N</div>
+        <div class="actions">
+          <button class="btn key" id="floatReset">重来</button>
+          <button class="btn key primary" id="drop">松手</button>
+        </div>
       </div>
     </div>
   </section>
 
   <dialog id="about">
     <h3>关于浮力实验室</h3>
-    <p>弹簧测力计吊着一块铝块，慢慢放进装满水的溢水杯。溢出的水流进小烧杯，可以和浮力比一比。</p>
+    <p><b>称一称</b>：弹簧测力计吊着铝块，慢慢放进装满水的溢水杯，溢出的水流进小烧杯，和浮力比一比。</p>
+    <p><b>变一变</b>：换液体、换物块，看浮力跟什么有关、跟什么无关。</p>
+    <p><b>浮还是沉</b>：松手，看物块最后漂浮还是沉底。</p>
     <ul>
-      <li>取 g = 9.8 N/kg，水的密度 1.0×10³ kg/m³，铝的密度 2.7×10³ kg/m³。</li>
-      <li>简化：杯子是规则圆柱，不计表面张力和弯月面，水只从溢水口流出。</li>
+      <li>取 g = 9.8 N/kg。密度用常见近似值（×10³ kg/m³）：酒精 0.8、水 1.0、盐水 1.1、木 0.5、蜡 0.9、铝 2.7、铁 7.9、铜 8.9。现实中木块和盐水的密度会有差别。</li>
+      <li>简化：杯子是规则圆柱，不计表面张力和弯月面，液体只从溢水口流出。</li>
       <li>数字保留两位小数；浮力由「物重 − 示数」算出。</li>
     </ul>
-    <p class="small">AI 辅助开发。知识点按《义务教育物理课程标准（2022 年版）》组织，未使用教材文字和插图。标题字体基于得意黑（atelierAnchor，SIL OFL 1.1）。</p>
-    <form method="dialog"><button class="btn primary">知道了</button></form>
+    <p class="small">AI 辅助开发。知识点按初中物理「浮力」整理，未使用教材文字和插图。字体为 Noto Sans SC 的子集（SIL OFL 1.1）。</p>
+    <form method="dialog"><button class="btn key primary">知道了</button></form>
   </dialog>
 </main>
 <script type="module" src="./src/main.ts"></script>

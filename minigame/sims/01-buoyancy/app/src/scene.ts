@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import type { Readings, Setup } from './physics';
+import type { Liquid, Solid } from './data';
+import type { Setup } from './physics';
 import * as T from './textures';
-import { createPost } from './post';
 
-// World units are centimetres; y is up and the top of the walnut display base
-// is y = 0. The rig sits on the base like a museum teaching model.
+// World units are centimetres; y is up and the table top is y = 0. A white
+// photo studio with a minimal table, lit like a product shot.
 
 const CUP_X = -2;
 const CUP_FLOOR = 0.6; // glass base thickness, same offset the physics uses
@@ -30,8 +30,8 @@ const PLATE_W = 3.5;
 const PLATE_H = 16.2;
 const PLATE_TOP = SC_TOP - 0.4;
 const P0 = -3; // pointer height at 0 N
-const K = 2.4; // cm of stretch per newton
-const DIAL_MAX = 5;
+const K = 1.2; // cm of stretch per newton
+const DIAL_MAX = 10;
 const SPRING_TOP = SC_TOP - 0.6;
 const FACE_Z = SC_DEPTH / 2 + 0.3; // spring, pointer and pull rod ride here
 const PULL_ROD = 15.9; // pointer to hook
@@ -39,17 +39,20 @@ const HOOK = 1.0;
 const STRING_LEN = 4.5;
 const EYE = 0.8; // cube top to where the string ties on
 
-// display base
-const PL = { x0: -27, x1: 21, z0: -17, z1: 13, h: 4.5, bevel: 0.35 };
-const FLOOR_Y = -(PL.h + PL.bevel * 2);
+// table
+const TABLE = { x0: -30, x1: 24, z0: -18, z1: 14, t: 2.4, leg: 0.9 };
+const FLOOR_Y = -74;
 
 const VIEW_AZIMUTH = THREE.MathUtils.degToRad(26);
 const VIEW_ELEVATION = THREE.MathUtils.degToRad(12);
 const VIEW_DIST = 125;
-const ARROW_CM_PER_N = 2.1;
 
-/** What the camera keeps in frame, in cm. */
+/** What the camera keeps in frame, in cm: the stand and both glasses, or
+ *  just the cup when there is no scale. */
 const RIG = { width: 46, height: 44, centerY: 16.5, centerX: -2 };
+const CUP_ONLY = { width: 24, height: 27, centerY: 9.5, centerX: CUP_X };
+
+export type Mode = 'weigh' | 'vary' | 'float';
 
 /** CSS px along each edge that the UI covers; the rig is framed in the rest. */
 export interface FreeArea {
@@ -66,20 +69,40 @@ export interface InsetRect {
   h: number;
 }
 
+export interface Forces {
+  G: number;
+  Fb: number;
+  Ft: number; // pull of the spring scale
+  N: number; // support from the cup floor
+}
+
+export interface SceneFrame {
+  cubeBottom: number; // above the cup floor
+  level: number; // liquid surface above the cup floor
+  beakerWater: number; // cm³
+  overflowing: boolean;
+  scaleReading: number;
+  forces: Forces;
+  time: number;
+}
+
 export interface SceneView {
   camera: THREE.PerspectiveCamera;
-  update(r: Readings, cubeBottom: number, beakerWater: number, overflowing: boolean, time: number): void;
+  update(f: SceneFrame): void;
+  setMode(m: Mode): void;
+  setSolid(id: Solid['id']): void;
+  setLiquid(id: Liquid['id']): void;
   setArrows(on: boolean): void;
   setInset(rect: InsetRect | null): void;
   resize(w: number, h: number, free: FreeArea): void;
-  render(time: number): void;
+  render(): void;
   /** World positions for HTML labels. */
-  anchors(): { G: THREE.Vector3; Fb: THREE.Vector3; Ft: THREE.Vector3 };
+  anchors(): { G: THREE.Vector3; Fb: THREE.Vector3; Ft: THREE.Vector3; N: THREE.Vector3; cup: THREE.Vector3 };
   cmPerPixel(): number;
 }
 
 export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NeutralToneMapping;
@@ -88,14 +111,15 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#0b1312');
+  scene.background = new THREE.Color('#e4e4e8');
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(studioEnvironment(), 0.02).texture;
-  scene.environmentIntensity = 1.0;
+  scene.environmentIntensity = 0.9;
   pmrem.dispose();
 
-  const camera = new THREE.PerspectiveCamera(30, 1, 10, 600);
-  const target = new THREE.Vector3(RIG.centerX, RIG.centerY, 0);
+  const camera = new THREE.PerspectiveCamera(30, 1, 10, 800);
+  let view = RIG;
+  const target = new THREE.Vector3(view.centerX, view.centerY, 0);
   const viewDir = new THREE.Vector3(
     Math.sin(VIEW_AZIMUTH) * Math.cos(VIEW_ELEVATION),
     Math.sin(VIEW_ELEVATION),
@@ -105,95 +129,114 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   camera.lookAt(target);
   camera.layers.enable(1); // force arrows live on layer 1
 
-  // --- lights ---------------------------------------------------------------
-  const key = new THREE.SpotLight('#ffe2bd', 5.2, 0, 0.5, 0.75, 0);
+  // --- lights -------------------------------------------------------------------------
+  const key = new THREE.SpotLight('#fffaf3', 3.4, 0, 0.55, 0.9, 0);
   key.position.set(-42, 92, 58);
   key.target.position.set(-2, 8, -6);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
-  key.shadow.radius = 5;
+  key.shadow.radius = 7;
   key.shadow.bias = -0.0002;
   key.shadow.normalBias = 0.03;
   key.shadow.camera.near = 50;
-  key.shadow.camera.far = 230;
+  key.shadow.camera.far = 260;
   scene.add(key, key.target);
-  // a soft pool of light on the backdrop behind the rig, so glass and water
-  // have something bright to refract
-  const back = new THREE.SpotLight('#8fc2b4', 7, 0, 0.42, 1, 0);
-  back.position.set(25, 70, 40);
-  back.target.position.set(-22, -4, -42);
-  scene.add(back, back.target);
-  const rim = new THREE.DirectionalLight('#c4ece1', 1.5);
+  const rim = new THREE.DirectionalLight('#ffffff', 0.9);
   rim.position.set(45, 35, -70);
   scene.add(rim);
 
-  // --- backdrop + walnut base ---------------------------------------------------
+  // --- studio + table -------------------------------------------------------------------------
   scene.add(sweep());
-  const wood = T.walnut(50, 31);
-  wood.offset.set(-PL.x0 / 50 + 0.01, PL.z1 / 31 + 0.01);
-  const plinth = new THREE.Mesh(
-    plinthGeometry(),
-    new THREE.MeshPhysicalMaterial({ map: wood, roughness: 0.55, clearcoat: 0.6, clearcoatRoughness: 0.2 }),
-  );
-  plinth.castShadow = true;
-  plinth.receiveShadow = true;
-  scene.add(plinth);
-  const plate = new THREE.Mesh(
-    new RoundedBoxGeometry(15, 2.7, 0.14, 2, 0.05),
-    new THREE.MeshStandardMaterial({
-      map: T.nameplate(15, 2.7, '浮力', 'BUOYANCY · No.01'),
-      metalness: 0.7,
-      roughness: 0.38,
+  const tableTop = new THREE.Mesh(
+    new RoundedBoxGeometry(TABLE.x1 - TABLE.x0, TABLE.t, TABLE.z1 - TABLE.z0, 4, 0.5),
+    new THREE.MeshPhysicalMaterial({
+      color: '#f6f6f4',
+      roughness: 0.42,
+      roughnessMap: T.speckle(256, 13),
+      clearcoat: 0.25,
+      clearcoatRoughness: 0.3,
     }),
   );
-  plate.position.set((PL.x0 + PL.x1) / 2, -PL.h / 2 - PL.bevel, PL.z1 + PL.bevel + 0.07);
-  scene.add(plate);
-  addDecal(scene, T.softBlob('rect'), (PL.x0 + PL.x1) / 2, (PL.z0 + PL.z1) / 2, PL.x1 - PL.x0 + 9, PL.z1 - PL.z0 + 9, 0, 0.75, FLOOR_Y + 0.02);
+  tableTop.position.set((TABLE.x0 + TABLE.x1) / 2, -TABLE.t / 2, (TABLE.z0 + TABLE.z1) / 2);
+  tableTop.receiveShadow = true;
+  tableTop.castShadow = true;
+  scene.add(tableTop);
+  const legMat = new THREE.MeshStandardMaterial({ color: '#1d1d1f', metalness: 0.4, roughness: 0.45 });
+  const legLen = -TABLE.t - FLOOR_Y;
+  for (const [x, z] of [
+    [TABLE.x0 + 4, TABLE.z0 + 4],
+    [TABLE.x1 - 4, TABLE.z0 + 4],
+    [TABLE.x0 + 4, TABLE.z1 - 4],
+    [TABLE.x1 - 4, TABLE.z1 - 4],
+  ]) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(TABLE.leg, TABLE.leg, legLen, 24), legMat);
+    leg.position.set(x, -TABLE.t - legLen / 2, z);
+    leg.castShadow = true;
+    scene.add(leg);
+    addDecal(scene, T.softBlob('round'), x, z, 9, 9, 0, 0.35, FLOOR_Y + 0.05);
+  }
+  addDecal(scene, T.softBlob('rect'), (TABLE.x0 + TABLE.x1) / 2, (TABLE.z0 + TABLE.z1) / 2, 80, 50, 0, 0.18, FLOOR_Y + 0.04);
 
-  // --- materials ------------------------------------------------------------------
+  // --- materials -------------------------------------------------------------------------------
   const glass = glassMaterials();
-  const water = new THREE.MeshPhysicalMaterial({
+  const liquidMat = new THREE.MeshPhysicalMaterial({
     color: '#ffffff',
     metalness: 0,
     roughness: 0.02,
     transmission: 1,
     ior: 1.333,
-    thickness: 12,
-    attenuationColor: new THREE.Color('#6cc0cc'),
-    attenuationDistance: 40,
+    // thinner than the real column on purpose: at full depth the refraction
+    // smears the submerged block, and the block is what the lesson is about
+    thickness: 4,
+    attenuationColor: new THREE.Color('#7cc6d2'),
+    attenuationDistance: 13,
     specularIntensity: 1,
-    // a faint glow stands in for light scattered inside the water, so the
-    // water body still reads against a dark backdrop
-    emissive: new THREE.Color('#0f3a3e'),
-    emissiveIntensity: 0.07,
   });
   const ripple = T.ripple();
   ripple.repeat.set(1.6, 1.6);
-  const waterTop = water.clone();
-  waterTop.normalMap = ripple;
-  waterTop.normalScale.set(0.25, 0.25);
-  waterTop.thickness = 2;
-  const chrome = new THREE.MeshStandardMaterial({ color: '#d9dde1', metalness: 1, roughness: 0.22 });
+  const liquidTop = liquidMat.clone();
+  liquidTop.normalMap = ripple;
+  liquidTop.normalScale.set(0.25, 0.25);
+  liquidTop.thickness = 2;
+  const chrome = new THREE.MeshStandardMaterial({ color: '#d9dde1', metalness: 1, roughness: 0.2 });
   const steel = new THREE.MeshStandardMaterial({ color: '#b9bec4', metalness: 1, roughness: 0.3 });
   const castIron = new THREE.MeshStandardMaterial({
-    color: '#222a29',
+    color: '#2a2c2f',
     metalness: 0.3,
-    roughness: 0.6,
+    roughness: 0.62,
     bumpMap: T.speckle(),
     bumpScale: 0.4,
   });
   const brushed = T.brushed();
-  const anodised = new THREE.MeshStandardMaterial({ color: '#c3c9ce', metalness: 1, roughness: 1, roughnessMap: brushed });
-  // bead-blasted aluminium, as school sample blocks usually are: part metal,
-  // part matte, so it stays readable under water in a dark room
-  const aluminium = new THREE.MeshStandardMaterial({
-    color: '#d6dade',
-    metalness: 0.6,
-    roughness: 1,
-    roughnessMap: T.brushed(256, 0.44, 0.3),
-  });
+  // space-grey casing: a shade darker than the backdrop so the scale reads as
+  // a framed instrument on white
+  const anodised = new THREE.MeshStandardMaterial({ color: '#5b6066', metalness: 0.75, roughness: 1, roughnessMap: brushed });
+  const solids: Record<Solid['id'], THREE.Material> = {
+    // bead-blasted, the way school sample blocks usually are
+    aluminium: new THREE.MeshStandardMaterial({
+      color: '#b6bbc1',
+      metalness: 0.5,
+      roughness: 1,
+      roughnessMap: T.brushed(256, 0.5, 0.3),
+      envMapIntensity: 0.7, // keep the key light's shading readable in a white room
+    }),
+    iron: new THREE.MeshStandardMaterial({
+      color: '#74787d',
+      metalness: 0.7,
+      roughness: 1,
+      roughnessMap: T.brushed(256, 0.5, 0.5),
+    }),
+    copper: new THREE.MeshStandardMaterial({
+      color: '#d38d62',
+      metalness: 1,
+      roughness: 1,
+      roughnessMap: T.brushed(256, 0.34, 0.4),
+    }),
+    wood: new THREE.MeshStandardMaterial({ map: T.maple(), roughness: 0.72 }),
+    wax: new THREE.MeshPhysicalMaterial({ color: '#f1ebdd', roughness: 0.5, clearcoat: 0.2, clearcoatRoughness: 0.5 }),
+  };
 
-  // --- overflow cup ------------------------------------------------------------------
+  // --- overflow cup ------------------------------------------------------------------------------
   const R = s.cupRadius;
   const cupGroup = new THREE.Group();
   cupGroup.position.set(CUP_X, 0, 0);
@@ -228,27 +271,38 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   spoutLip.quaternion.copy(spoutQ).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
   scene.add(spoutLip);
 
-  // water columns are rebuilt rather than scaled: transmission stretches its
-  // refraction ray by the mesh scale, which would turn the water opaque
-  const cupWater = new THREE.Mesh(new THREE.BufferGeometry(), water);
-  const cupWaterTop = new THREE.Mesh(new THREE.CircleGeometry(R - 0.02, 128), waterTop);
-  cupWaterTop.rotation.x = -Math.PI / 2;
+  // liquid columns are rebuilt rather than scaled: transmission stretches its
+  // refraction ray by the mesh scale, which would turn the liquid opaque
+  const cupLiquid = new THREE.Mesh(new THREE.BufferGeometry(), liquidMat);
+  const cupLiquidTop = new THREE.Mesh(new THREE.CircleGeometry(R - 0.02, 128), liquidTop);
+  cupLiquidTop.rotation.x = -Math.PI / 2;
   const meniscus = new THREE.Mesh(
     new THREE.TorusGeometry(R - 0.06, 0.06, 6, 128),
-    new THREE.MeshBasicMaterial({ color: '#dff6f2', transparent: true, opacity: 0.35, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, depthWrite: false }),
   );
   meniscus.rotation.x = Math.PI / 2;
   meniscus.renderOrder = 4;
-  cupGroup.add(cupWater, cupWaterTop, meniscus);
-  const spoutWater = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, spoutLen - 0.5, 24), water);
-  spoutWater.position.copy(spoutMid);
-  spoutWater.quaternion.copy(spoutQ);
-  scene.add(spoutWater);
+  cupGroup.add(cupLiquid, cupLiquidTop, meniscus);
+  const spoutLiquid = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, spoutLen - 0.5, 24), liquidMat);
+  spoutLiquid.position.copy(spoutMid);
+  spoutLiquid.quaternion.copy(spoutQ);
+  scene.add(spoutLiquid);
 
-  // --- catch beaker ------------------------------------------------------------------
+  // light through the liquid column: a faint shadow and a moving caustic
+  const lightDir = new THREE.Vector2(key.target.position.x - key.position.x, key.target.position.z - key.position.z).normalize();
+  const lightYaw = -Math.atan2(lightDir.y, lightDir.x);
+  const gShadow = T.glassShadow();
+  addDecal(scene, T.softBlob('ring', 0.8), CUP_X, 0, ((R + CUP_WALL) * 2) / 0.8, ((R + CUP_WALL) * 2) / 0.8, 0, 0.4, 0.012);
+  addDecal(scene, gShadow, CUP_X + lightDir.x * 8.7, lightDir.y * 8.7, 35, 17.5, lightYaw, 0.13, 0.014);
+  const cupCaustic = causticMaterial('#fff6e6', 0.3);
+  addDecal(scene, null, CUP_X + lightDir.x * 7.5, lightDir.y * 7.5, 15, 10, lightYaw, 1, 0.016, cupCaustic);
+
+  // --- catch beaker (scales A and B only) --------------------------------------------------
+  const catcher = new THREE.Group();
+  scene.add(catcher);
   const beaker = new THREE.Group();
   beaker.position.set(BEAKER_X, 0, 0);
-  scene.add(beaker);
+  catcher.add(beaker);
   const BR = BEAKER_R;
   const bProfile = [
     new THREE.Vector2(0, 0),
@@ -271,31 +325,20 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   marks.position.y = BEAKER_FLOOR + 4;
   marks.renderOrder = 7;
   beaker.add(marks);
-  const bWater = new THREE.Mesh(new THREE.BufferGeometry(), water);
-  const bWaterTop = new THREE.Mesh(new THREE.CircleGeometry(BR - 0.02, 96), waterTop);
+  const bWater = new THREE.Mesh(new THREE.BufferGeometry(), liquidMat);
+  const bWaterTop = new THREE.Mesh(new THREE.CircleGeometry(BR - 0.02, 96), liquidTop);
   bWaterTop.rotation.x = -Math.PI / 2;
   beaker.add(bWater, bWaterTop);
+  addDecal(catcher, T.softBlob('ring', 0.8), BEAKER_X, 0, ((BR + BEAKER_WALL) * 2) / 0.8, ((BR + BEAKER_WALL) * 2) / 0.8, 0, 0.35, 0.012);
+  addDecal(catcher, gShadow, BEAKER_X + lightDir.x * 5.3, lightDir.y * 5.3, 21, 10.5, lightYaw, 0.18, 0.014);
+  const beakerCaustic = causticMaterial('#fff6e6', 0);
+  addDecal(catcher, null, BEAKER_X + lightDir.x * 4.5, lightDir.y * 4.5, 9, 6, lightYaw, 1, 0.016, beakerCaustic);
+  const stream = new THREE.Mesh(new THREE.BufferGeometry(), liquidMat);
+  catcher.add(stream);
 
-  const streamMat = water.clone();
-  streamMat.thickness = 0.6;
-  const stream = new THREE.Mesh(new THREE.BufferGeometry(), streamMat);
-  scene.add(stream);
-
-  // light through the water columns: faint shadows and moving caustics
-  const lightDir = new THREE.Vector2(key.target.position.x - key.position.x, key.target.position.z - key.position.z).normalize();
-  const lightYaw = -Math.atan2(lightDir.y, lightDir.x);
-  const gShadow = T.glassShadow();
-  addDecal(scene, T.softBlob('ring', 0.8), CUP_X, 0, (R + CUP_WALL) * 2 / 0.8, (R + CUP_WALL) * 2 / 0.8, 0, 0.55, 0.012);
-  addDecal(scene, gShadow, CUP_X + lightDir.x * 8.7, lightDir.y * 8.7, 35, 17.5, lightYaw, 0.32, 0.014);
-  const cupCaustic = causticMaterial('#ffe9c4', 0.5);
-  addDecal(scene, null, CUP_X + lightDir.x * 7.5, lightDir.y * 7.5, 15, 10, lightYaw, 1, 0.016, cupCaustic);
-  addDecal(scene, T.softBlob('ring', 0.8), BEAKER_X, 0, (BR + BEAKER_WALL) * 2 / 0.8, (BR + BEAKER_WALL) * 2 / 0.8, 0, 0.5, 0.012);
-  addDecal(scene, gShadow, BEAKER_X + lightDir.x * 5.3, lightDir.y * 5.3, 21, 10.5, lightYaw, 0.28, 0.014);
-  const beakerCaustic = causticMaterial('#ffe9c4', 0);
-  const cupCausticBase = 0.5;
-  addDecal(scene, null, BEAKER_X + lightDir.x * 4.5, lightDir.y * 4.5, 9, 6, lightYaw, 1, 0.016, beakerCaustic);
-
-  // --- iron stand --------------------------------------------------------------------
+  // --- iron stand + spring scale (scales A and B only) --------------------------------------
+  const rig = new THREE.Group();
+  scene.add(rig);
   const base = new THREE.Mesh(new RoundedBoxGeometry(10, BASE_H, 19, 3, 0.4), castIron);
   base.position.set(ROD_X, BASE_H / 2, ROD_Z + 7.5);
   const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, ROD_H, 40), chrome);
@@ -304,18 +347,17 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   rodCap.position.set(ROD_X, BASE_H + ROD_H, ROD_Z);
   const rodFoot = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.15, 0.8, 32), castIron);
   rodFoot.position.set(ROD_X, BASE_H + 0.4, ROD_Z);
-  scene.add(base, rod, rodCap, rodFoot);
-  addDecal(scene, T.softBlob('rect'), ROD_X, ROD_Z + 7.5, 13, 22, 0, 0.6, 0.012);
+  rig.add(base, rod, rodCap, rodFoot);
+  addDecal(rig, T.softBlob('rect'), ROD_X, ROD_Z + 7.5, 13, 22, 0, 0.45, 0.012);
 
   const armGroup = new THREE.Group(); // slides on the rod with the drag
-  scene.add(armGroup);
+  rig.add(armGroup);
   const armFrom = new THREE.Vector3(ROD_X, 0, ROD_Z);
   const armTo = new THREE.Vector3(CUP_X, 0, 0);
   const armDir = armTo.clone().sub(armFrom).normalize();
   const armLen = armTo.distanceTo(armFrom) + 0.8;
-  const armQ = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), armDir);
   const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, armLen, 32), chrome);
-  arm.quaternion.copy(armQ);
+  arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), armDir);
   arm.position.copy(armFrom).addScaledVector(armDir, armLen / 2);
   const boss = new THREE.Mesh(new RoundedBoxGeometry(2.8, 2.8, 2.8, 3, 0.45), castIron);
   boss.position.copy(armFrom);
@@ -331,12 +373,10 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   armHook.position.set(CUP_X, -0.55, 0);
   armHook.rotation.y = VIEW_AZIMUTH;
   armGroup.add(arm, boss, knob1, knob2, armHook);
-  for (const m of [arm, boss, knob1, knob2]) m.traverse((o) => (o.castShadow = true));
 
-  // --- spring scale -----------------------------------------------------------------
   const scale = new THREE.Group();
   scale.rotation.y = VIEW_AZIMUTH;
-  scene.add(scale);
+  rig.add(scale);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.1, 10, 28), steel);
   ring.rotation.y = Math.PI / 2;
   const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1.0, 12), steel);
@@ -357,8 +397,7 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   cover.position.set(0, PLATE_TOP - PLATE_H / 2, FACE_Z + 0.42);
   const guide = new THREE.Mesh(new RoundedBoxGeometry(1.2, 0.6, 0.9, 2, 0.15), steel);
   guide.position.set(0, SC_TOP - SC_LEN + 0.3, FACE_Z - 0.1);
-  const springMat = steel;
-  const spring = new THREE.Mesh(new THREE.BufferGeometry(), springMat);
+  const spring = new THREE.Mesh(new THREE.BufferGeometry(), steel);
   spring.position.set(0, 0, FACE_Z);
   const pointer = new THREE.Group();
   const bar = new THREE.Mesh(
@@ -373,50 +412,48 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   const hook = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.1, 10, 28, Math.PI * 1.45), steel);
   hook.rotation.z = Math.PI * 0.78;
   scale.add(ring, stem, casing, face, anchor, cover, guide, spring, pointer, pull, hook);
-  for (const m of [ring, casing, pull, hook, pointer, spring]) m.traverse((o) => (o.castShadow = true));
-
-  // --- string + aluminium cube ------------------------------------------------------
   const string = new THREE.Mesh(
     new THREE.CylinderGeometry(0.045, 0.045, STRING_LEN + 0.9, 8),
     new THREE.MeshStandardMaterial({ color: '#efeadc', roughness: 0.95 }),
   );
-  string.castShadow = true;
-  scene.add(string);
+  rig.add(string);
+  rig.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh && o !== cover.children[0] && o !== cover.children[1]) o.castShadow = true;
+  });
+
+  // --- the cube --------------------------------------------------------------------------------------
   const a = s.cubeSide;
-  const cube = new THREE.Mesh(new RoundedBoxGeometry(a, a, a, 5, 0.14), aluminium);
+  const cube = new THREE.Mesh(new RoundedBoxGeometry(a, a, a, 5, 0.13), solids.aluminium);
   cube.rotation.y = VIEW_AZIMUTH - 0.6;
   cube.castShadow = true;
-  const eye = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.08, 10, 24), steel);
-  eye.position.y = a / 2 + 0.42;
-  const stud = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.2, 12), steel);
+  const eye = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.075, 10, 24), steel);
+  eye.position.y = a / 2 + 0.4;
+  const stud = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.19, 0.2, 12), steel);
   stud.position.y = a / 2 + 0.1;
   cube.add(eye, stud);
   scene.add(cube);
-  for (const m of [base, rod, rodFoot, cube]) m.castShadow = true;
 
-  // --- force arrows ------------------------------------------------------------------
+  // --- force arrows ------------------------------------------------------------------------------
   const arrows = new THREE.Group();
   arrows.rotation.y = VIEW_AZIMUTH;
   scene.add(arrows);
-  const gArrow = forceArrow('#ff8a5c');
-  const bArrow = forceArrow('#5cc8ff');
-  const tArrow = forceArrow('#ffd166');
-  arrows.add(gArrow.group, bArrow.group, tArrow.group);
+  const arrowG = forceArrow('#1d1d1f');
+  const arrowFb = forceArrow('#0071e3');
+  const arrowFt = forceArrow('#8e8e93');
+  const arrowN = forceArrow('#8e8e93');
+  arrows.add(arrowG.group, arrowFb.group, arrowFt.group, arrowN.group);
   arrows.traverse((o) => o.layers.set(1));
 
-  // --- dial close-up camera -----------------------------------------------------------
-  const insetCam = new THREE.PerspectiveCamera(20, 1, 1, 200);
+  // --- dial close-up camera ------------------------------------------------------------------------
+  const insetCam = new THREE.PerspectiveCamera(22, 1, 1, 200);
   let inset: InsetRect | null = null;
 
-  // --- post ------------------------------------------------------------------------------
-  const post = createPost(renderer, scene, camera);
   if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __lab: { scene, renderer, THREE } });
 
-  // --- api -------------------------------------------------------------------------------
+  // --- api ---------------------------------------------------------------------------------------------
   const tmp = new THREE.Vector3();
-  const tipG = new THREE.Vector3();
-  const tipB = new THREE.Vector3();
-  const tipT = new THREE.Vector3();
+  const tips = { G: new THREE.Vector3(), Fb: new THREE.Vector3(), Ft: new THREE.Vector3(), N: new THREE.Vector3() };
+  const cupAnchor = new THREE.Vector3(CUP_X - R - 0.6, CUP_HEIGHT - 1.5, 0);
   let streamAmount = 0;
   let springLen = -1;
   let cupLevel = -1;
@@ -425,51 +462,64 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   let lastFree: FreeArea = { top: 0, bottom: 0, left: 0, right: 0 };
   let cmPerPx = 0.1;
   let lift = 0; // extra height framed when the rig is raised
+  let mode: Mode = 'weigh';
+  let perN = 2;
 
-  function update(r: Readings, cubeBottom: number, beakerWater: number, overflowing: boolean, time: number) {
-    // hang the chain from the cube up: cube → string → hook → pull rod → pointer
-    const bottomWorld = CUP_FLOOR + cubeBottom;
+  function update(f: SceneFrame) {
+    const bottomWorld = CUP_FLOOR + f.cubeBottom;
     cube.position.set(CUP_X, bottomWorld + a / 2, 0);
-    const knot = bottomWorld + a + EYE;
-    const F = THREE.MathUtils.clamp(r.scaleReading, 0, DIAL_MAX);
-    const pointerY = P0 - F * K;
-    const hookY = pointerY - PULL_ROD - HOOK;
-    const ringY = knot + STRING_LEN - hookY;
-    scale.position.set(CUP_X, ringY, 0);
-    armGroup.position.y = ringY + 1.1;
+    const hasScale = mode !== 'float';
+    let top = bottomWorld + a + 2;
+
+    if (hasScale) {
+      // hang the chain from the cube up: cube → string → hook → pull rod → pointer
+      const knot = bottomWorld + a + EYE;
+      const F = THREE.MathUtils.clamp(f.scaleReading, 0, DIAL_MAX);
+      const pointerY = P0 - F * K;
+      const hookY = pointerY - PULL_ROD - HOOK;
+      const ringY = knot + STRING_LEN - hookY;
+      scale.position.set(CUP_X, ringY, 0);
+      armGroup.position.y = ringY + 1.1;
+      string.position.set(CUP_X, knot + STRING_LEN / 2, 0);
+      pointer.position.y = pointerY;
+      pull.position.set(0, pointerY - PULL_ROD / 2, FACE_Z - 0.1);
+      hook.position.set(0, hookY + 0.5, FACE_Z - 0.1);
+      const len = SPRING_TOP - 0.25 - (pointerY + 0.2);
+      if (Math.abs(len - springLen) > 0.01) {
+        springLen = len;
+        spring.geometry.dispose();
+        spring.geometry = helix(SPRING_TOP - 0.25, len, 0.22, 0.045, 18);
+      }
+      top = ringY;
+      if (inset) {
+        scale.updateMatrixWorld();
+        const p = scale.localToWorld(tmp.set(0, pointerY, SC_DEPTH / 2));
+        insetCam.position.copy(p).addScaledVector(viewDir.clone().setY(0).normalize(), 15).add(new THREE.Vector3(0, 0.8, 0));
+        insetCam.lookAt(p);
+      }
+    }
     // let the camera ease up when the scale is lifted out of the base framing
-    const want = Math.max(0, ringY + 7 - (RIG.centerY + RIG.height / 2));
+    const want = Math.max(0, top + 7 - (view.centerY + view.height / 2));
     if (Math.abs(want - lift) > 0.02) {
       lift += (want - lift) * 0.12;
       frame(size.w, size.h, lastFree);
     }
-    string.position.set(CUP_X, knot + (STRING_LEN - 0.9) / 2 + 0.45, 0);
 
-    pointer.position.y = pointerY;
-    pull.position.set(0, pointerY - PULL_ROD / 2, FACE_Z - 0.1);
-    hook.position.set(0, hookY + 0.5, FACE_Z - 0.1);
-    const len = SPRING_TOP - 0.25 - (pointerY + 0.2);
-    if (Math.abs(len - springLen) > 0.01) {
-      springLen = len;
-      spring.geometry.dispose();
-      spring.geometry = helix(SPRING_TOP - 0.25, len, 0.22, 0.045, 18);
-    }
-
-    // water in the cup
-    const lvl = Math.max(r.level, 0.01);
+    // liquid in the cup
+    const lvl = Math.max(f.level, 0.01);
     if (Math.abs(lvl - cupLevel) > 0.003) {
       cupLevel = lvl;
-      setColumn(cupWater, R - 0.02, lvl, 128);
-      cupWater.position.y = CUP_FLOOR + lvl / 2;
+      setColumn(cupLiquid, R - 0.02, lvl, 128);
+      cupLiquid.position.y = CUP_FLOOR + lvl / 2;
     }
-    cupWaterTop.position.y = CUP_FLOOR + lvl;
+    cupLiquidTop.position.y = CUP_FLOOR + lvl;
     meniscus.position.y = CUP_FLOOR + lvl;
-    ripple.offset.set(time * 0.012, time * 0.009);
-    spoutWater.visible = r.level >= s.spoutHeight - 0.05;
+    ripple.offset.set(f.time * 0.012, f.time * 0.009);
+    spoutLiquid.visible = hasScale && f.level >= s.spoutHeight - 0.05;
 
     // beaker
-    const bh = beakerWater / (Math.PI * (BR - 0.02) ** 2);
-    bWater.visible = bWaterTop.visible = beakerWater > 0.5;
+    const bh = f.beakerWater / (Math.PI * (BR - 0.02) ** 2);
+    bWater.visible = bWaterTop.visible = f.beakerWater > 0.5;
     if (Math.abs(bh - beakerLevel) > 0.003) {
       beakerLevel = bh;
       setColumn(bWater, BR - 0.02, Math.max(bh, 0.01), 96);
@@ -478,7 +528,7 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
     bWaterTop.position.y = BEAKER_FLOOR + bh;
 
     // overflow stream
-    streamAmount += ((overflowing ? 1 : 0) - streamAmount) * 0.25;
+    streamAmount += ((f.overflowing ? 1 : 0) - streamAmount) * 0.25;
     stream.visible = streamAmount > 0.03;
     if (stream.visible) {
       const yEnd = BEAKER_FLOOR + Math.max(bh, 0);
@@ -492,32 +542,29 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
       stream.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 32, 0.2 * streamAmount + 0.04, 12);
     }
 
-    cupCaustic.uniforms.uTime.value = time;
-    beakerCaustic.uniforms.uTime.value = time;
-    beakerCaustic.uniforms.uStrength.value = THREE.MathUtils.clamp(beakerWater / 60, 0, 1) * cupCausticBase * 0.4;
+    cupCaustic.uniforms.uTime.value = f.time;
+    beakerCaustic.uniforms.uTime.value = f.time;
+    beakerCaustic.uniforms.uStrength.value = THREE.MathUtils.clamp(f.beakerWater / 60, 0, 1) * 0.25;
 
-    // arrows from the cube centre: G down, F浮 and F拉 up, side by side
-    const c = cube.position;
-    gArrow.set(tmp.set(0, 0, 0), -1, r.weight * ARROW_CM_PER_N);
-    bArrow.set(tmp.set(-1.15, 0, 0), 1, r.buoyancy * ARROW_CM_PER_N);
-    tArrow.set(tmp.set(1.15, 0, 0), 1, r.scaleReading * ARROW_CM_PER_N);
-    arrows.position.copy(c).addScaledVector(viewDir, a * 0.75);
+    // force arrows from the cube centre; the longest one is kept a readable
+    // length, and all of them share that scale so they compare honestly
+    const { G, Fb, Ft, N } = f.forces;
+    const wantPerN = THREE.MathUtils.clamp(7 / Math.max(G, Fb + Ft + N, 0.1), 0.6, 6);
+    perN += (wantPerN - perN) * 0.15;
+    arrowG.set(tmp.set(0, 0, 0), -1, G * perN);
+    arrowFb.set(tmp.set(-1.1, 0, 0), 1, Fb * perN);
+    arrowFt.set(tmp.set(1.1, 0, 0), 1, Ft * perN);
+    arrowN.set(tmp.set(1.1, 0, 0), 1, N * perN);
+    arrows.position.copy(cube.position).addScaledVector(viewDir, a * 0.75);
     arrows.updateMatrixWorld();
-    arrows.localToWorld(tipG.set(0, -r.weight * ARROW_CM_PER_N, 0));
-    arrows.localToWorld(tipB.set(-1.15, r.buoyancy * ARROW_CM_PER_N, 0));
-    arrows.localToWorld(tipT.set(1.15, r.scaleReading * ARROW_CM_PER_N, 0));
-
-    // close-up camera looks straight at the pointer
-    if (inset) {
-      scale.updateMatrixWorld();
-      const p = scale.localToWorld(tmp.set(0, pointerY, SC_DEPTH / 2));
-      insetCam.position.copy(p).addScaledVector(viewDir.clone().setY(0).normalize(), 15).add(new THREE.Vector3(0, 0.8, 0));
-      insetCam.lookAt(p);
-    }
+    arrows.localToWorld(tips.G.set(0, -G * perN, 0));
+    arrows.localToWorld(tips.Fb.set(-1.1, Fb * perN, 0));
+    arrows.localToWorld(tips.Ft.set(1.1, Ft * perN, 0));
+    arrows.localToWorld(tips.N.set(1.1, N * perN, 0));
   }
 
   function frame(w: number, h: number, free: FreeArea) {
-    target.set(RIG.centerX, RIG.centerY + lift / 2, 0);
+    target.set(view.centerX, view.centerY + lift / 2, 0);
     camera.position.copy(target).addScaledVector(viewDir, VIEW_DIST);
     camera.lookAt(target);
     // centre the rig in the uncovered area by shifting the view window
@@ -525,7 +572,7 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
     const freeH = Math.max(h - free.top - free.bottom, h * 0.35);
     const cx = free.left + freeW / 2;
     const cy = free.top + freeH / 2;
-    cmPerPx = Math.max((RIG.height + lift) / freeH, RIG.width / freeW);
+    cmPerPx = Math.max((view.height + lift) / freeH, view.width / freeW);
     const fullW = 2 * Math.max(cx, w - cx);
     const fullH = 2 * Math.max(cy, h - cy);
     camera.aspect = fullW / fullH;
@@ -534,9 +581,37 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
     camera.updateProjectionMatrix();
   }
 
+  const liquidLooks: Record<Liquid['id'], [string, number]> = {
+    water: ['#7cc6d2', 13],
+    brine: ['#9fcfc8', 10],
+    alcohol: ['#cfe9ee', 24],
+  };
+
   return {
     camera,
     update,
+    setMode(m) {
+      mode = m;
+      const scaled = m !== 'float';
+      // without the scale the overflow cup becomes a plain glass of liquid
+      rig.visible = catcher.visible = spout.visible = spoutLip.visible = scaled;
+      eye.visible = stud.visible = scaled;
+      arrowFt.group.visible = scaled;
+      arrowN.group.visible = !scaled;
+      view = scaled ? RIG : CUP_ONLY;
+      lift = 0;
+      frame(size.w, size.h, lastFree);
+    },
+    setSolid(id) {
+      cube.material = solids[id];
+    },
+    setLiquid(id) {
+      const [color, dist] = liquidLooks[id];
+      for (const m of [liquidMat, liquidTop]) {
+        m.attenuationColor.set(color);
+        m.attenuationDistance = dist;
+      }
+    },
     setArrows(on) {
       arrows.visible = on;
     },
@@ -551,12 +626,11 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
       size = { w, h };
       lastFree = free;
       renderer.setSize(w, h, false);
-      post.setSize(w, h);
       frame(w, h, free);
     },
-    render(time) {
-      post.render(time);
-      if (inset) {
+    render() {
+      renderer.render(scene, camera);
+      if (inset && mode !== 'float') {
         const y = size.h - inset.y - inset.h;
         renderer.shadowMap.autoUpdate = false; // reuse the main pass's shadows
         renderer.setScissorTest(true);
@@ -564,12 +638,12 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
         renderer.setViewport(inset.x, y, inset.w, inset.h);
         renderer.render(scene, insetCam);
         renderer.setScissorTest(false);
-        renderer.shadowMap.autoUpdate = true;
         renderer.setViewport(0, 0, size.w, size.h);
+        renderer.shadowMap.autoUpdate = true;
       }
     },
     anchors() {
-      return { G: tipG, Fb: tipB, Ft: tipT };
+      return { ...tips, cup: cupAnchor };
     },
     cmPerPixel() {
       return cmPerPx;
@@ -577,45 +651,55 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   };
 }
 
-// ---------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------------------
 
-/** A dark studio with three softboxes, used only to light reflections. */
+/** A bright studio with softboxes, used only to light reflections. */
 function studioEnvironment(): THREE.Scene {
   const env = new THREE.Scene();
   const room = new THREE.Mesh(
     new THREE.BoxGeometry(200, 120, 200),
-    new THREE.MeshBasicMaterial({ color: '#0d1615', side: THREE.BackSide }),
+    new THREE.MeshBasicMaterial({ color: '#8f9195', side: THREE.BackSide }),
   );
   env.add(room);
-  const softbox = (w: number, h: number, pos: [number, number, number], color: string, power: number) => {
+  // negative fill: black flags beside the set put dark edges on glass and
+  // metal, the way product photographers keep white objects off a white sweep
+  const flag = (x: number, z: number) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(60, 110), new THREE.MeshBasicMaterial({ color: '#000000', side: THREE.DoubleSide }));
+    m.position.set(x, 10, z);
+    m.lookAt(0, 10, 0);
+    env.add(m);
+  };
+  flag(-96, 10);
+  flag(96, 30);
+  const softbox = (w: number, h: number, pos: [number, number, number], power: number) => {
     const m = new THREE.Mesh(
       new THREE.PlaneGeometry(w, h),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(power), side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffffff').multiplyScalar(power), side: THREE.DoubleSide }),
     );
     m.position.set(...pos);
     m.lookAt(0, 0, 0);
     env.add(m);
   };
-  softbox(60, 34, [-55, 60, 50], '#fff1dc', 5); // key, matches the spotlight
-  softbox(14, 70, [80, 10, -40], '#d2f1e8', 3.5); // tall strip behind right
-  softbox(70, 10, [0, 58, -70], '#ffffff', 1.6); // top back
-  softbox(120, 30, [0, -55, 0], '#3b2a1c', 0.6); // warm bounce from the base
-  softbox(90, 50, [50, 20, 95], '#e9f1ee', 0.9); // big white card on the camera side
+  softbox(60, 34, [-55, 60, 50], 6); // key, matches the spotlight
+  softbox(14, 70, [80, 10, -40], 3.5); // tall strip behind right
+  softbox(70, 10, [0, 58, -70], 2); // top back
+  softbox(90, 50, [50, 20, 95], 1.6); // big white card on the camera side
+  softbox(160, 40, [0, -55, 0], 0.9); // light bouncing off the white table
   return env;
 }
 
 function sweep(): THREE.Mesh {
   // a photo-studio cyclorama: floor curving up into the back wall
-  const W = 600;
-  const r = 50;
-  const zBack = -60;
+  const W = 800;
+  const r = 60;
+  const zBack = -90;
   const prof: [number, number][] = [];
-  for (let i = 0; i <= 10; i++) prof.push([FLOOR_Y, 220 - i * ((220 - (zBack + r)) / 10)]);
+  for (let i = 0; i <= 10; i++) prof.push([FLOOR_Y, 260 - i * ((260 - (zBack + r)) / 10)]);
   for (let i = 1; i <= 20; i++) {
     const t = (i / 20) * (Math.PI / 2);
     prof.push([FLOOR_Y + r - r * Math.cos(t), zBack + r - r * Math.sin(t)]);
   }
-  for (let i = 1; i <= 8; i++) prof.push([FLOOR_Y + r + i * 40, zBack]);
+  for (let i = 1; i <= 8; i++) prof.push([FLOOR_Y + r + i * 50, zBack]);
   const pos: number[] = [];
   const idx: number[] = [];
   prof.forEach(([y, z]) => pos.push(-W / 2, y, z, W / 2, y, z));
@@ -627,41 +711,35 @@ function sweep(): THREE.Mesh {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(idx);
   g.computeVertexNormals();
-  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: '#46605a', roughness: 0.92 }));
-  return m;
-}
-
-function plinthGeometry(): THREE.ExtrudeGeometry {
-  // rounded rectangle in (x, -z), extruded upward; UVs are in centimetres
-  const { x0, x1, z0, z1, h, bevel } = PL;
-  const r = 1.2;
-  const shape = new THREE.Shape();
-  const y0 = -z1;
-  const y1 = -z0;
-  shape.moveTo(x0 + r, y0);
-  shape.lineTo(x1 - r, y0);
-  shape.quadraticCurveTo(x1, y0, x1, y0 + r);
-  shape.lineTo(x1, y1 - r);
-  shape.quadraticCurveTo(x1, y1, x1 - r, y1);
-  shape.lineTo(x0 + r, y1);
-  shape.quadraticCurveTo(x0, y1, x0, y1 - r);
-  shape.lineTo(x0, y0 + r);
-  shape.quadraticCurveTo(x0, y0, x0 + r, y0);
-  const g = new THREE.ExtrudeGeometry(shape, {
-    depth: h,
-    bevelEnabled: true,
-    bevelThickness: bevel,
-    bevelSize: bevel,
-    bevelSegments: 4,
-    curveSegments: 8,
+  // unlit: a soft pool of light behind the bench fading to pale grey, so the
+  // backdrop stays clean whatever the lights do
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uInner: { value: new THREE.Color('#fbfbfc') },
+      uOuter: { value: new THREE.Color('#e4e4e8') },
+    },
+    vertexShader: /* glsl */ `
+      varying vec3 vW;
+      void main() {
+        vec4 w = modelMatrix * vec4(position, 1.0);
+        vW = w.xyz;
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uInner;
+      uniform vec3 uOuter;
+      varying vec3 vW;
+      void main() {
+        float d = length((vW.xy - vec2(-2.0, 22.0)) * vec2(0.55, 1.0));
+        gl_FragColor = vec4(mix(uInner, uOuter, smoothstep(15.0, 120.0, d)), 1.0);
+        #include <colorspace_fragment>
+      }`,
   });
-  g.rotateX(-Math.PI / 2);
-  g.translate(0, -(h + bevel), 0);
-  return g;
+  return new THREE.Mesh(g, mat);
 }
 
 function addDecal(
-  scene: THREE.Scene,
+  parent: THREE.Object3D,
   map: THREE.Texture | null,
   x: number,
   z: number,
@@ -674,23 +752,21 @@ function addDecal(
 ) {
   const geo = new THREE.PlaneGeometry(w, d);
   geo.rotateX(-Math.PI / 2);
-  const mat =
-    material ??
-    new THREE.MeshBasicMaterial({ map, transparent: true, opacity, depthWrite: false });
+  const mat = material ?? new THREE.MeshBasicMaterial({ map, transparent: true, opacity, depthWrite: false });
   const m = new THREE.Mesh(geo, mat);
   m.position.set(x, y, z);
   m.rotation.y = yaw;
   m.renderOrder = 1;
-  scene.add(m);
+  parent.add(m);
   return m;
 }
 
 // Clear glass is mostly what it reflects plus darker edges where you look
-// through more of it. Two layers fake that without hiding the water inside:
+// through more of it. Two layers fake that without hiding the liquid inside:
 // one multiplies a tint that grows toward grazing angles, one adds reflections.
 function glassMaterials() {
   const tint = new THREE.ShaderMaterial({
-    uniforms: { uTint: { value: new THREE.Color('#7fa49d') } },
+    uniforms: { uTint: { value: new THREE.Color('#5f6867') } },
     vertexShader: /* glsl */ `
       varying vec3 vN;
       varying vec3 vV;
@@ -706,8 +782,8 @@ function glassMaterials() {
       varying vec3 vV;
       void main() {
         float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
-        f = pow(f, 2.4);
-        gl_FragColor = vec4(mix(vec3(0.97), uTint, f), 1.0);
+        f = pow(f, 1.8);
+        gl_FragColor = vec4(mix(vec3(0.985), uTint, f), 1.0);
       }`,
     transparent: true,
     depthWrite: false,
@@ -723,7 +799,7 @@ function glassMaterials() {
     roughnessMap: T.smudge(),
     metalness: 0,
     specularIntensity: 1,
-    envMapIntensity: 2.6,
+    envMapIntensity: 1.4,
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
@@ -734,11 +810,11 @@ function glassMaterials() {
 
 function glassMesh(geo: THREE.BufferGeometry, m: ReturnType<typeof glassMaterials>): THREE.Group {
   const g = new THREE.Group();
-  const a = new THREE.Mesh(geo, m.tint);
-  const b = new THREE.Mesh(geo, m.shine);
-  a.renderOrder = 5;
-  b.renderOrder = 6;
-  g.add(a, b);
+  const tint = new THREE.Mesh(geo, m.tint);
+  const shine = new THREE.Mesh(geo, m.shine);
+  tint.renderOrder = 5;
+  shine.renderOrder = 6;
+  g.add(tint, shine);
   return g;
 }
 
@@ -760,8 +836,8 @@ function causticMaterial(color: THREE.ColorRepresentation, strength: number) {
       uniform vec3 uColor;
       uniform float uStrength;
       varying vec2 vUv;
-      // light bent by the water column gathers into a soft crescent on the far
-      // side, mottled by the moving surface
+      // light bent by the liquid column gathers into a soft crescent on the
+      // far side, mottled by the moving surface
       void main() {
         vec2 q = vUv * 2.0 - 1.0;
         float r = length(q * vec2(1.0, 1.35));
@@ -808,22 +884,22 @@ function knob(body: THREE.Material, metal: THREE.Material): THREE.Group {
 }
 
 function forceArrow(color: string) {
-  // flat-shaded arrow with a dark outline, drawn over everything
+  // flat arrow with a white halo, drawn over everything
   const fill = new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false, transparent: true });
   const edge = new THREE.MeshBasicMaterial({
-    color: '#0d1a1a',
+    color: '#ffffff',
     depthTest: false,
     depthWrite: false,
     transparent: true,
     side: THREE.BackSide,
   });
-  const shaftGeo = new THREE.CylinderGeometry(0.17, 0.17, 1, 14);
-  const headGeo = new THREE.ConeGeometry(0.55, 1.3, 24);
+  const shaftGeo = new THREE.CylinderGeometry(0.15, 0.15, 1, 14);
+  const headGeo = new THREE.ConeGeometry(0.48, 1.15, 24);
   const shaft = new THREE.Mesh(shaftGeo, fill);
   const head = new THREE.Mesh(headGeo, fill);
   const shaftEdge = new THREE.Mesh(shaftGeo, edge);
   const headEdge = new THREE.Mesh(headGeo, edge);
-  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 8), fill);
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 8), fill);
   const group = new THREE.Group();
   group.add(shaftEdge, headEdge, shaft, head, dot);
   shaftEdge.renderOrder = headEdge.renderOrder = 30;
@@ -832,17 +908,18 @@ function forceArrow(color: string) {
     group,
     set(origin: THREE.Vector3, dir: 1 | -1, len: number) {
       group.position.copy(origin);
-      const shaftLen = Math.max(len - 1.3, 0.01);
+      const shaftLen = Math.max(len - 1.15, 0.01);
       shaft.scale.y = shaftLen;
       shaft.position.y = (dir * shaftLen) / 2;
-      head.position.y = dir * (shaftLen + 0.65);
+      head.position.y = dir * (shaftLen + 0.575);
       head.rotation.z = dir === 1 ? 0 : Math.PI;
-      shaftEdge.scale.set(1.5, shaftLen, 1.5);
+      shaftEdge.scale.set(1.6, shaftLen, 1.6);
       shaftEdge.position.copy(shaft.position);
       headEdge.scale.set(1.25, 1.18, 1.25);
       headEdge.position.copy(head.position);
       headEdge.rotation.copy(head.rotation);
-      group.visible = len > 0.3;
+      // hidden when the force is absent
+      shaft.visible = head.visible = shaftEdge.visible = headEdge.visible = dot.visible = len > 0.05;
     },
   };
 }

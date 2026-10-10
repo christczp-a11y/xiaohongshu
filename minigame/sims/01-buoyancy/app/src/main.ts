@@ -49,6 +49,7 @@ function segmented<T extends string>(el: HTMLElement, items: { id: T; label: str
   el.replaceChildren(
     ...items.map((it) => {
       const b = document.createElement('button');
+      b.className = 'key';
       b.textContent = it.label;
       b.dataset.id = it.id;
       b.addEventListener('click', () => {
@@ -247,7 +248,7 @@ function varyMode(): Controller {
     g.textAlign = 'right';
     g.textBaseline = 'middle';
     for (const f of [0, 0.5, 1]) {
-      g.strokeStyle = f === 0 ? '#c7c7cc' : '#ececf0';
+      g.strokeStyle = f === 0 ? '#aeaeb2' : '#dcdce1';
       g.beginPath();
       g.moveTo(L, y(f) + 0.5);
       g.lineTo(W - R, y(f) + 0.5);

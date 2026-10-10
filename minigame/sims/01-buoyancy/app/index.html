@@ -13,15 +13,15 @@
   <header class="top">
     <div class="brand">
       <h1 class="title">浮力实验室</h1>
-      <div class="kicker">初中物理 · 浮力</div>
+      <div class="kicker"><span>BUOYANCY LAB</span><i></i><span>01</span></div>
     </div>
-    <button class="round" id="aboutBtn" aria-label="关于">?</button>
+    <button class="round key" id="aboutBtn" aria-label="关于">?</button>
   </header>
 
-  <nav class="seg tabs" id="tabs" role="tablist">
-    <button class="on" role="tab" data-mode="weigh" aria-selected="true">称一称</button>
-    <button role="tab" data-mode="vary" aria-selected="false">变一变</button>
-    <button role="tab" data-mode="float" aria-selected="false">浮还是沉</button>
+  <nav class="tabs" id="tabs" role="tablist">
+    <button class="key on" role="tab" data-mode="weigh" aria-selected="true"><small>01</small>称一称</button>
+    <button class="key" role="tab" data-mode="vary" aria-selected="false"><small>02</small>变一变</button>
+    <button class="key" role="tab" data-mode="float" aria-selected="false"><small>03</small>浮还是沉</button>
   </nav>
 
   <figure class="inset" id="inset">
@@ -36,7 +36,7 @@
 
   <div class="hint" id="hint"><span class="hand">↕</span><span id="hintText">上下拖动，把铝块放进水里</span></div>
 
-  <button class="chip" id="arrowToggle" aria-pressed="true">受力分析<span class="sw"></span></button>
+  <button class="chip key" id="arrowToggle" aria-pressed="true">受力分析<span class="sw"></span></button>
 
   <section class="dock" id="dock">
     <div class="card">
@@ -52,8 +52,8 @@
         <div class="formula">单位 N　　F浮 = G − F拉</div>
         <div class="eq" id="eqrow"><b>F浮</b><span class="sign" id="eqSign">?</span><b>G排</b><em id="eqNote">把铝块放进水里看看</em></div>
         <div class="actions">
-          <button class="btn ghost" id="reset">重做</button>
-          <button class="btn primary" id="record">记录这组数据</button>
+          <button class="btn key" id="reset">重做</button>
+          <button class="btn key primary" id="record">记录这组数据</button>
         </div>
       </div>
 
@@ -71,7 +71,7 @@
           <div class="m"><span class="k">浸入深度 h</span><b id="yH">0.0</b></div>
         </div>
         <div class="chart">
-          <div class="chart-head"><span>F浮 随浸入深度 h 的变化</span><button id="clearChart">清空</button></div>
+          <div class="chart-head"><span>F浮 随浸入深度 h 的变化</span><button class="key" id="clearChart">清空</button></div>
           <canvas id="chart"></canvas>
         </div>
       </div>
@@ -91,8 +91,8 @@
         </div>
         <div class="formula">密度单位 ×10³ kg/m³　　力的单位 N</div>
         <div class="actions">
-          <button class="btn ghost" id="floatReset">重来</button>
-          <button class="btn primary" id="drop">松手</button>
+          <button class="btn key" id="floatReset">重来</button>
+          <button class="btn key primary" id="drop">松手</button>
         </div>
       </div>
     </div>
@@ -108,8 +108,8 @@
       <li>简化：杯子是规则圆柱，不计表面张力和弯月面，液体只从溢水口流出。</li>
       <li>数字保留两位小数；浮力由「物重 − 示数」算出。</li>
     </ul>
-    <p class="small">AI 辅助开发。知识点按初中物理「浮力」整理，未使用教材文字和插图。</p>
-    <form method="dialog"><button class="btn primary">知道了</button></form>
+    <p class="small">AI 辅助开发。知识点按初中物理「浮力」整理，未使用教材文字和插图。标题字体基于得意黑（atelierAnchor，SIL OFL 1.1）。</p>
+    <form method="dialog"><button class="btn key primary">知道了</button></form>
   </dialog>
 </main>
 <script type="module" src="./src/main.ts"></script>

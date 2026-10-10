@@ -42,7 +42,7 @@
     <div class="card">
       <!-- 称一称 -->
       <div class="panel" data-for="weigh">
-        <div class="guide"><b class="step" id="stepNo">1</b><span id="stepText">先读测力计：铝块在空气中有多重？</span></div>
+        <div class="guide"><b class="step" id="stepNo">1</b><span id="stepText">先读测力计：铝块在空气中有多重？</span><button class="key redo" id="reset">重做</button></div>
         <div class="meters">
           <div class="m"><span class="k"><i class="dot g"></i>物重 G</span><b id="vG">0.00</b></div>
           <div class="m"><span class="k"><i class="dot t"></i>示数 F拉</span><b id="vF">0.00</b></div>
@@ -51,10 +51,6 @@
         </div>
         <div class="formula">单位 N　　F浮 = G − F拉</div>
         <div class="eq" id="eqrow"><b>F浮</b><span class="sign" id="eqSign">?</span><b>G排</b><em id="eqNote">把铝块放进水里看看</em></div>
-        <div class="actions">
-          <button class="btn key" id="reset">重做</button>
-          <button class="btn key primary" id="record">记录这组数据</button>
-        </div>
       </div>
 
       <!-- 变一变 -->

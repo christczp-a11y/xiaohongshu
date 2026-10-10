@@ -100,16 +100,10 @@ function run(view: SceneView) {
     const eqNote = $('eqNote');
     const stepNo = $('stepNo');
     const stepText = $('stepText');
-    let noteUntil = 0;
 
     $('reset').addEventListener('click', () => {
       state = initialState(s, START_BOTTOM);
       target = START_BOTTOM;
-    });
-    $('record').addEventListener('click', () => {
-      // the data table is not built yet; say so instead of pretending
-      noteUntil = performance.now() + 2500;
-      stepText.textContent = '记录表还在做，先把这组数字记在本子上吧';
     });
 
     const c: Controller = {
@@ -146,17 +140,15 @@ function run(view: SceneView) {
               ? '水正在流进小烧杯'
               : '烧杯里有之前溢出的水，点「重做」再来'
             : '把铝块放进水里看看';
-        if (performance.now() > noteUntil) {
-          const [n, text] = !inWater
-            ? ['1', '先读测力计：铝块在空气中有多重？']
-            : !full
-              ? ['2', '慢慢往下放，盯着测力计的指针']
-              : overflowing
-                ? ['3', '全部浸没了，等溢出的水流完']
-                : ['4', '比一比：浮力和溢出的水重'];
-          stepNo.textContent = n;
-          stepText.textContent = text;
-        }
+        const [n, text] = !inWater
+          ? ['1', '先读测力计：铝块在空气中有多重？']
+          : !full
+            ? ['2', '慢慢往下放，盯着测力计的指针']
+            : overflowing
+              ? ['3', '全部浸没了，等溢出的水流完']
+              : ['4', '比一比：浮力和溢出的水重'];
+        stepNo.textContent = n;
+        stepText.textContent = text;
         c.labels = {
           G: `G ${d.weight}N`,
           Fb: inWater ? `F浮 ${d.buoyancy}N` : undefined,

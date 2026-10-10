@@ -6,8 +6,19 @@
 - `minigame/01-feasibility.md`：小红书小工具可行性调研与上传规格（zip ≤ 10MB，名称/简介 ≤ 14 字）
 - `minigame/02-textbook-sims.md`：按教材知识点做模拟的规划
 - `minigame/research/`：画风参考的复述
+- `minigame/STYLE.md`：所有模拟统一的画面、界面、交互规范和每日流程
 - `minigame/sims/01-buoyancy/`：第一个模拟「浮力实验室」（`buoyancy-lab.html` 打包好的离线页面，双击就能打开；`design.md` 设计稿，`app/` 代码，`mockup/` 效果图）
+- `minigame/sims/02-water-cycle/`：「水去哪儿了」水循环，`STYLE.md` 的参照实现
 - `minigame/fonts/`：页面统一用的字体（Noto Sans SC）和许可
+
+## 运行水循环
+```bash
+cd minigame/sims/02-water-cycle/app
+npm install
+npm run dev     # 本地预览
+npm test        # 地形测试
+npm run build   # 打包成 dist/index.html（离线单文件）
+```
 
 ## 运行浮力实验室
 ```bash

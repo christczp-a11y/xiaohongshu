@@ -25,4 +25,6 @@
 ## 技术
 - `src/terrain.ts`：地形高度函数（纯函数）。`src/terrain.test.ts` 检查湖底低于最低水位、湖外陆地高于最高水位、河流往下游走。
 - `src/main.ts`：场景、粒子、交互和界面。
-- 打包后是一个约 0.6MB 的离线 HTML。
+- `npm run build`：打成约 0.6MB 的单文件网页，给网站用。
+- `npm run minitool`：打成小红书小工具包（`scripts/build-minitool.mjs`），zip 约 0.2MB，里面是 `index.html`、`main.js`（经典脚本，ES2017）、`style.css` 和 `fallback.webp`（不支持 3D 时显示的静态图）。
+- 画质分三档，按实测帧率自动往下降；`?stats` 可以显示每帧的 draw call 和三角形数。

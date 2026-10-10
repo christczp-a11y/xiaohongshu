@@ -8,6 +8,28 @@
 - 竖屏优先，横屏也能用。打开就能玩，不需要先读说明。
 - 小工具名称、简介各 ≤ 14 字。
 
+## 小工具打包规范（官方 minitool-zip-builder 1.7.0，2026-10-10 读过并按它改过 02）
+- 上传用的包和网页版是两套产物：`npm run build` 打出单文件网页（挂网站用）；`npm run minitool` 打出 `dist-minitool/` 和 zip（上传小红书用）。
+- zip 根目录直接放 `index.html`，同时只允许 `.html/.css/.js/图片/字体/.json`。
+- **脚本必须外置、必须是经典脚本**：不能用内联 `<script>`，不能用 `type="module"`。由 esbuild 打成 IIFE，目标 ES2017 / Chrome 61。
+- **CSS 以 Chrome 61 为基线**：
+  - flex 布局不用 `gap`，改用子项 margin；grid 用 `grid-gap`。
+  - 不用 `inset`。
+  - 安全区用 `@supports` 包住的 `var(--safe-area-inset-*, env(...))`。
+  - 新特性只能拿来做增强，不能是唯一实现。
+- **WebGL 预算**：
+  - DPR ≤ 1.5，画布总像素 ≤ 200 万。
+  - 每帧 draw call ≤ 100、三角形 ≤ 10 万，阴影那一遍也算在内；最低档减半。
+  - 用 `?stats` 看实测数字。02 的实测是：默认 24 次 draw call、9.5 万三角形；最低档 17 次、4.6 万三角形。
+- **必须有降级和兜底**：
+  - 帧率持续偏低就逐级降档：先降分辨率和阴影贴图，再关阴影、换低模。
+  - 降到最低档仍低于约 12 帧，就停掉循环，显示静态图加文字讲解。
+  - 设备不支持 WebGL 2 时直接显示静态图（three.js r163 起只支持 WebGL 2）。
+  - 页面隐藏时停止渲染。context 丢失时停止渲染，并显示「重新打开」按钮。
+- 不用网络请求、Worker、WASM、eval、剪贴板、传感器、`window.open`、外链、下载。
+- 交付前跑一遍 skill 自带的审计脚本：`python -I <skill>/scripts/audit_artifact.py dist-minitool` 和 zip 各跑一次。
+- 浏览器里跑通不算数。上传后要在创服平台模拟器、安卓真机、iOS 真机各扫码验证一次，这三步由 Chris 做。
+
 ## 画面：展台上的切面微缩
 - 主体是一块真实质感的微缩场景，放在**白色哑光方台**上。场景侧面切开，露出内部（土层、结构、液体剖面）。
 - 地面只显示一层很淡的影子，背景和页面融成一体。不用木纹、黄铜之类的装饰。
@@ -53,7 +75,7 @@
 ## 每天的流程
 1. 定知识点，写 `design.md`：学习目标、交互方式、做了哪些简化。
 2. 复制 `sims/02-water-cycle/app` 作为起点。界面骨架和样式不改，只换场景和逻辑。
-3. 跑 `npm test` 和 `npm run build`，再用手机竖屏看一遍。
+3. 跑 `npm test`、`npm run build` 和 `npm run minitool`，再用手机竖屏看一遍。
 4. 推到 git。发布到小红书由 Chris 手动完成。
 
 ## 还没对齐的

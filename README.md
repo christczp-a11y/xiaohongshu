@@ -8,7 +8,7 @@
 - `minigame/research/`：画风参考的复述
 - `minigame/STYLE.md`：所有模拟统一的画面、界面、交互规范和每日流程
 - `minigame/sims/01-buoyancy/`：第一个模拟「浮力实验室」（`buoyancy-lab.html` 打包好的离线页面，双击就能打开；`design.md` 设计稿，`app/` 代码，`mockup/` 效果图）
-- `minigame/sims/02-water-cycle/`：「水去哪儿了」水循环，`STYLE.md` 的参照实现
+- `minigame/sims/02-water-cycle/`：「水去哪儿了」水循环，`STYLE.md` 的参照实现（`water-cycle.html` 打包好的离线页面；`design.md` 设计稿，`app/` 代码）
 - `minigame/fonts/`：页面统一用的字体（Noto Sans SC）和许可
 
 ## 运行水循环

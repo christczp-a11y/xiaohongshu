@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Liquid, Solid } from './data';
 import type { Setup } from './physics';
 import * as T from './textures';
@@ -47,10 +48,26 @@ const VIEW_AZIMUTH = THREE.MathUtils.degToRad(26);
 const VIEW_ELEVATION = THREE.MathUtils.degToRad(12);
 const VIEW_DIST = 125;
 
+const G_CM = 980; // gravity, cm/s²
+
 /** What the camera keeps in frame, in cm: the stand and both glasses, or
  *  just the cup when there is no scale. */
 const RIG = { width: 46, height: 44, centerY: 16.5, centerX: -2 };
 const CUP_ONLY = { width: 24, height: 27, centerY: 9.5, centerX: CUP_X };
+
+/**
+ * Rendering tiers, best first, inside the mini-tool's phone budget (drawing
+ * buffer ≤ 2M pixels at DPR ≤ 1.5, then ≤ 1M at DPR 1). The page starts at 0
+ * and steps down while frames run long; each step drops one costly effect.
+ */
+const TIERS = [
+  { dpr: 1.5, pixels: 2.0e6, shadow: 2048, transmission: 1, extras: true },
+  { dpr: 1, pixels: 1.0e6, shadow: 1024, transmission: 0.5, extras: true },
+  { dpr: 1, pixels: 1.0e6, shadow: 0, transmission: 0.5, extras: true },
+  // transmission 0: liquids drawn as plain tinted glass; no extras: no caustics, no glass over the dial
+  { dpr: 1, pixels: 1.0e6, shadow: 0, transmission: 0, extras: false },
+];
+export const QUALITY_TIERS = TIERS.length;
 
 export type Mode = 'weigh' | 'vary' | 'float';
 
@@ -94,21 +111,26 @@ export interface SceneView {
   setLiquid(id: Liquid['id']): void;
   setArrows(on: boolean): void;
   setInset(rect: InsetRect | null): void;
+  setQuality(tier: number): void;
   resize(w: number, h: number, free: FreeArea): void;
   render(): void;
   /** World positions for HTML labels. */
   anchors(): { G: THREE.Vector3; Fb: THREE.Vector3; Ft: THREE.Vector3; N: THREE.Vector3; cup: THREE.Vector3 };
   cmPerPixel(): number;
+  /** Last frame's draw calls and triangles over every pass (shadow, transmission, main, inset). */
+  info(): { calls: number; triangles: number; dpr: number };
 }
 
-export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
+/** `onFail` is called if a shader cannot be built on this device. */
+export function createScene(canvas: HTMLCanvasElement, s: Setup, onFail: () => void): SceneView {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.debug.onShaderError = () => onFail();
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.info.autoReset = false;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#e4e4e8');
@@ -144,6 +166,8 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   const rim = new THREE.DirectionalLight('#ffffff', 0.9);
   rim.position.set(45, 35, -70);
   scene.add(rim);
+  const lightDir = new THREE.Vector2(key.target.position.x - key.position.x, key.target.position.z - key.position.z).normalize();
+  const lightYaw = -Math.atan2(lightDir.y, lightDir.x);
 
   // --- studio + table -------------------------------------------------------------------------
   scene.add(sweep());
@@ -159,23 +183,31 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   );
   tableTop.position.set((TABLE.x0 + TABLE.x1) / 2, -TABLE.t / 2, (TABLE.z0 + TABLE.z1) / 2);
   tableTop.receiveShadow = true;
-  tableTop.castShadow = true;
   scene.add(tableTop);
-  const legMat = new THREE.MeshStandardMaterial({ color: '#1d1d1f', metalness: 0.4, roughness: 0.45 });
   const legLen = -TABLE.t - FLOOR_Y;
-  for (const [x, z] of [
+  const legSpots = [
     [TABLE.x0 + 4, TABLE.z0 + 4],
     [TABLE.x1 - 4, TABLE.z0 + 4],
     [TABLE.x0 + 4, TABLE.z1 - 4],
     [TABLE.x1 - 4, TABLE.z1 - 4],
-  ]) {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(TABLE.leg, TABLE.leg, legLen, 24), legMat);
-    leg.position.set(x, -TABLE.t - legLen / 2, z);
-    leg.castShadow = true;
-    scene.add(leg);
-    addDecal(scene, T.softBlob('round'), x, z, 9, 9, 0, 0.35, FLOOR_Y + 0.05);
+  ];
+  const legs = new THREE.Mesh(
+    merge(legSpots.map(([x, z]) => at(new THREE.CylinderGeometry(TABLE.leg, TABLE.leg, legLen, 20), x, -TABLE.t - legLen / 2, z))),
+    new THREE.MeshStandardMaterial({ color: '#1d1d1f', metalness: 0.4, roughness: 0.45 }),
+  );
+  scene.add(legs);
+  // the soft shadow of the table and its feet on the studio floor, baked once
+  {
+    const x0 = TABLE.x0 - 16;
+    const z0 = TABLE.z0 - 16;
+    const w = TABLE.x1 - TABLE.x0 + 32;
+    const d = TABLE.z1 - TABLE.z0 + 32;
+    const items: T.ShadowItem[] = [
+      { shape: 'rect', x: (TABLE.x0 + TABLE.x1) / 2, z: (TABLE.z0 + TABLE.z1) / 2, w: 80, d: 50, alpha: 0.18 },
+      ...legSpots.map(([x, z]): T.ShadowItem => ({ shape: 'round', x, z, w: 9, d: 9, alpha: 0.35 })),
+    ];
+    addDecal(scene, T.shadowSheet(x0, z0, w, d, 6, items), x0 + w / 2, z0 + d / 2, w, d, 0, 1, FLOOR_Y + 0.04);
   }
-  addDecal(scene, T.softBlob('rect'), (TABLE.x0 + TABLE.x1) / 2, (TABLE.z0 + TABLE.z1) / 2, 80, 50, 0, 0.18, FLOOR_Y + 0.04);
 
   // --- materials -------------------------------------------------------------------------------
   const glass = glassMaterials();
@@ -198,6 +230,26 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   liquidTop.normalMap = ripple;
   liquidTop.normalScale.set(0.25, 0.25);
   liquidTop.thickness = 2;
+  // the lowest tier skips the transmission pass: tinted, see-through liquid
+  const liquidLite = new THREE.MeshStandardMaterial({
+    color: '#7cc6d2',
+    roughness: 0.05,
+    metalness: 0,
+    transparent: true,
+    opacity: 0.4,
+    depthWrite: false,
+  });
+  const liquidTopLite = liquidLite.clone();
+  liquidTopLite.normalMap = ripple;
+  liquidTopLite.normalScale.set(0.25, 0.25);
+  liquidTopLite.opacity = 0.5;
+  const cupWaves = rippleField(s.cupRadius - 0.02);
+  const beakerWaves = rippleField(BEAKER_R - 0.02);
+  const cupTop = withRipples(liquidTop.clone(), cupWaves);
+  const beakerTop = withRipples(liquidTop.clone(), beakerWaves);
+  const cupTopLite = withRipples(liquidTopLite.clone(), cupWaves);
+  const beakerTopLite = withRipples(liquidTopLite.clone(), beakerWaves);
+
   const chrome = new THREE.MeshStandardMaterial({ color: '#d9dde1', metalness: 1, roughness: 0.2 });
   const steel = new THREE.MeshStandardMaterial({ color: '#b9bec4', metalness: 1, roughness: 0.3 });
   const castIron = new THREE.MeshStandardMaterial({
@@ -252,7 +304,7 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
     new THREE.Vector2(R - 0.3, CUP_FLOOR),
     new THREE.Vector2(0, CUP_FLOOR),
   ];
-  cupGroup.add(glassMesh(new THREE.LatheGeometry(cupProfile, 128), glass));
+  cupGroup.add(glassMesh(new THREE.LatheGeometry(cupProfile, 96), glass));
 
   // spout: a glass tube leaving the wall at the spout height, angled down
   const spoutAngle = THREE.MathUtils.degToRad(24);
@@ -262,40 +314,42 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   const spoutEnd = spoutStart.clone().addScaledVector(spoutDir, spoutLen);
   const spoutMid = spoutStart.clone().lerp(spoutEnd, 0.5);
   const spoutQ = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), spoutDir);
-  const spout = glassMesh(new THREE.CylinderGeometry(0.62, 0.62, spoutLen, 40, 1, true), glass);
-  spout.position.copy(spoutMid);
-  spout.quaternion.copy(spoutQ);
+  const lipQ = spoutQ.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
+  const spout = glassMesh(
+    merge([
+      at(new THREE.CylinderGeometry(0.62, 0.62, spoutLen, 32, 1, true), spoutMid.x, spoutMid.y, spoutMid.z, spoutQ),
+      at(new THREE.TorusGeometry(0.62, 0.1, 8, 32), spoutEnd.x, spoutEnd.y, spoutEnd.z, lipQ),
+    ]),
+    glass,
+  );
   scene.add(spout);
-  const spoutLip = glassMesh(new THREE.TorusGeometry(0.62, 0.1, 10, 40), glass);
-  spoutLip.position.copy(spoutEnd);
-  spoutLip.quaternion.copy(spoutQ).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
-  scene.add(spoutLip);
 
-  // liquid columns are rebuilt rather than scaled: transmission stretches its
-  // refraction ray by the mesh scale, which would turn the liquid opaque
-  const cupLiquid = new THREE.Mesh(new THREE.BufferGeometry(), liquidMat);
-  const cupLiquidTop = new THREE.Mesh(new THREE.CircleGeometry(R - 0.02, 128), liquidTop);
+  // liquid columns are reshaped in place rather than scaled: transmission
+  // stretches its refraction ray by the mesh scale, which would turn the
+  // liquid opaque
+  const cupLiquid = column(R - 0.02, 72, liquidMat);
+  const cupLiquidTop = new THREE.Mesh(new THREE.CircleGeometry(R - 0.02, 72), cupTop);
   cupLiquidTop.rotation.x = -Math.PI / 2;
   const meniscus = new THREE.Mesh(
-    new THREE.TorusGeometry(R - 0.06, 0.06, 6, 128),
+    new THREE.TorusGeometry(R - 0.06, 0.06, 6, 72),
     new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, depthWrite: false }),
   );
   meniscus.rotation.x = Math.PI / 2;
   meniscus.renderOrder = 4;
-  cupGroup.add(cupLiquid, cupLiquidTop, meniscus);
-  const spoutLiquid = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, spoutLen - 0.5, 24), liquidMat);
+  cupGroup.add(cupLiquid.mesh, cupLiquidTop, meniscus);
+  const spoutLiquid = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, spoutLen - 0.5, 16), liquidMat);
   spoutLiquid.position.copy(spoutMid);
   spoutLiquid.quaternion.copy(spoutQ);
   scene.add(spoutLiquid);
 
-  // light through the liquid column: a faint shadow and a moving caustic
-  const lightDir = new THREE.Vector2(key.target.position.x - key.position.x, key.target.position.z - key.position.z).normalize();
-  const lightYaw = -Math.atan2(lightDir.y, lightDir.x);
-  const gShadow = T.glassShadow();
-  addDecal(scene, T.softBlob('ring', 0.8), CUP_X, 0, ((R + CUP_WALL) * 2) / 0.8, ((R + CUP_WALL) * 2) / 0.8, 0, 0.4, 0.012);
-  addDecal(scene, gShadow, CUP_X + lightDir.x * 8.7, lightDir.y * 8.7, 35, 17.5, lightYaw, 0.13, 0.014);
+  // light through the liquid column: a faint shadow, baked, and a moving caustic
+  const cupShadow = T.shadowSheet(TABLE.x0, TABLE.z0, TABLE.x1 - TABLE.x0, TABLE.z1 - TABLE.z0, 16, [
+    { shape: 'ring', inner: 0.8, x: CUP_X, z: 0, w: ((R + CUP_WALL) * 2) / 0.8, d: ((R + CUP_WALL) * 2) / 0.8, alpha: 0.4 },
+    { shape: 'glass', x: CUP_X + lightDir.x * 8.7, z: lightDir.y * 8.7, w: 35, d: 17.5, yaw: lightYaw, alpha: 0.13 },
+  ]);
+  tableDecal(scene, cupShadow, 0.013);
   const cupCaustic = causticMaterial('#fff6e6', 0.3);
-  addDecal(scene, null, CUP_X + lightDir.x * 7.5, lightDir.y * 7.5, 15, 10, lightYaw, 1, 0.016, cupCaustic);
+  const caustics = [addDecal(scene, null, CUP_X + lightDir.x * 7.5, lightDir.y * 7.5, 15, 10, lightYaw, 1, 0.016, cupCaustic)];
 
   // --- catch beaker (scales A and B only) --------------------------------------------------
   const catcher = new THREE.Group();
@@ -315,7 +369,7 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
     new THREE.Vector2(BR - 0.2, BEAKER_FLOOR),
     new THREE.Vector2(0, BEAKER_FLOOR),
   ];
-  beaker.add(glassMesh(new THREE.LatheGeometry(bProfile, 96), glass));
+  beaker.add(glassMesh(new THREE.LatheGeometry(bProfile, 64), glass));
   const mlPerCm = Math.PI * BR * BR;
   const markArc = 0.9;
   const marks = new THREE.Mesh(
@@ -325,62 +379,98 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   marks.position.y = BEAKER_FLOOR + 4;
   marks.renderOrder = 7;
   beaker.add(marks);
-  const bWater = new THREE.Mesh(new THREE.BufferGeometry(), liquidMat);
-  const bWaterTop = new THREE.Mesh(new THREE.CircleGeometry(BR - 0.02, 96), liquidTop);
+  const bWater = column(BR - 0.02, 48, liquidMat);
+  const bWaterTop = new THREE.Mesh(new THREE.CircleGeometry(BR - 0.02, 48), beakerTop);
   bWaterTop.rotation.x = -Math.PI / 2;
-  beaker.add(bWater, bWaterTop);
-  addDecal(catcher, T.softBlob('ring', 0.8), BEAKER_X, 0, ((BR + BEAKER_WALL) * 2) / 0.8, ((BR + BEAKER_WALL) * 2) / 0.8, 0, 0.35, 0.012);
-  addDecal(catcher, gShadow, BEAKER_X + lightDir.x * 5.3, lightDir.y * 5.3, 21, 10.5, lightYaw, 0.18, 0.014);
+  beaker.add(bWater.mesh, bWaterTop);
   const beakerCaustic = causticMaterial('#fff6e6', 0);
-  addDecal(catcher, null, BEAKER_X + lightDir.x * 4.5, lightDir.y * 4.5, 9, 6, lightYaw, 1, 0.016, beakerCaustic);
-  const stream = new THREE.Mesh(new THREE.BufferGeometry(), liquidMat);
-  catcher.add(stream);
+  caustics.push(addDecal(catcher, null, BEAKER_X + lightDir.x * 4.5, lightDir.y * 4.5, 9, 6, lightYaw, 1, 0.016, beakerCaustic));
+  const stream = streamMesh(liquidMat);
+  catcher.add(stream.mesh);
 
   // --- iron stand + spring scale (scales A and B only) --------------------------------------
   const rig = new THREE.Group();
   scene.add(rig);
-  const base = new THREE.Mesh(new RoundedBoxGeometry(10, BASE_H, 19, 3, 0.4), castIron);
-  base.position.set(ROD_X, BASE_H / 2, ROD_Z + 7.5);
-  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, ROD_H, 40), chrome);
-  rod.position.set(ROD_X, BASE_H + ROD_H / 2, ROD_Z);
-  const rodCap = new THREE.Mesh(new THREE.SphereGeometry(0.55, 24, 12), chrome);
-  rodCap.position.set(ROD_X, BASE_H + ROD_H, ROD_Z);
-  const rodFoot = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.15, 0.8, 32), castIron);
-  rodFoot.position.set(ROD_X, BASE_H + 0.4, ROD_Z);
-  rig.add(base, rod, rodCap, rodFoot);
-  addDecal(rig, T.softBlob('rect'), ROD_X, ROD_Z + 7.5, 13, 22, 0, 0.45, 0.012);
+  const rigIron = new THREE.Mesh(
+    merge([
+      at(new RoundedBoxGeometry(10, BASE_H, 19, 3, 0.4), ROD_X, BASE_H / 2, ROD_Z + 7.5),
+      at(new THREE.CylinderGeometry(1.0, 1.15, 0.8, 32), ROD_X, BASE_H + 0.4, ROD_Z),
+    ]),
+    castIron,
+  );
+  const rigChrome = new THREE.Mesh(
+    merge([
+      at(new THREE.CylinderGeometry(0.55, 0.55, ROD_H, 32), ROD_X, BASE_H + ROD_H / 2, ROD_Z),
+      at(new THREE.SphereGeometry(0.55, 24, 12), ROD_X, BASE_H + ROD_H, ROD_Z),
+    ]),
+    chrome,
+  );
+  rig.add(rigIron, rigChrome);
+  // the stand's base, the beaker and the glass's shadow go away together in 浮还是沉
+  tableDecal(
+    catcher,
+    T.shadowSheet(TABLE.x0, TABLE.z0, TABLE.x1 - TABLE.x0, TABLE.z1 - TABLE.z0, 16, [
+      { shape: 'rect', x: ROD_X, z: ROD_Z + 7.5, w: 13, d: 22, alpha: 0.45 },
+      { shape: 'ring', inner: 0.8, x: BEAKER_X, z: 0, w: ((BR + BEAKER_WALL) * 2) / 0.8, d: ((BR + BEAKER_WALL) * 2) / 0.8, alpha: 0.35 },
+      { shape: 'glass', x: BEAKER_X + lightDir.x * 5.3, z: lightDir.y * 5.3, w: 21, d: 10.5, yaw: lightYaw, alpha: 0.18 },
+    ]),
+    0.012,
+  );
 
-  const armGroup = new THREE.Group(); // slides on the rod with the drag
+  // the boss and arm slide up and down the rod with the drag
+  const armGroup = new THREE.Group();
   rig.add(armGroup);
   const armFrom = new THREE.Vector3(ROD_X, 0, ROD_Z);
   const armTo = new THREE.Vector3(CUP_X, 0, 0);
   const armDir = armTo.clone().sub(armFrom).normalize();
   const armLen = armTo.distanceTo(armFrom) + 0.8;
-  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, armLen, 32), chrome);
-  arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), armDir);
-  arm.position.copy(armFrom).addScaledVector(armDir, armLen / 2);
-  const boss = new THREE.Mesh(new RoundedBoxGeometry(2.8, 2.8, 2.8, 3, 0.45), castIron);
-  boss.position.copy(armFrom);
-  boss.rotation.y = -Math.atan2(armDir.z, armDir.x);
+  const up = new THREE.Vector3(0, 1, 0);
   const side = new THREE.Vector3(-armDir.z, 0, armDir.x); // horizontal, across the arm
-  const knob1 = knob(castIron, steel);
-  knob1.position.copy(armFrom).addScaledVector(side, -1.4);
-  knob1.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), side.clone().negate());
-  const knob2 = knob(castIron, steel);
-  knob2.position.copy(armFrom).addScaledVector(armDir, -1.4);
-  knob2.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), armDir.clone().negate());
-  const armHook = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.11, 10, 32), steel);
-  armHook.position.set(CUP_X, -0.55, 0);
-  armHook.rotation.y = VIEW_AZIMUTH;
-  armGroup.add(arm, boss, knob1, knob2, armHook);
+  const armQ = new THREE.Quaternion().setFromUnitVectors(up, armDir);
+  const knob1Q = new THREE.Quaternion().setFromUnitVectors(up, side.clone().negate());
+  const knob2Q = new THREE.Quaternion().setFromUnitVectors(up, armDir.clone().negate());
+  const knob1At = armFrom.clone().addScaledVector(side, -1.4);
+  const knob2At = armFrom.clone().addScaledVector(armDir, -1.4);
+  // a thumbscrew: short threaded shaft with a ribbed head, along its own +y
+  const knobPart = (r: number, h: number, y: number, seg: number, p: THREE.Vector3, q: THREE.Quaternion) =>
+    at(new THREE.CylinderGeometry(r, r, h, seg).translate(0, y, 0), p.x, p.y, p.z, q);
+  const armHookQ = new THREE.Quaternion().setFromAxisAngle(up, VIEW_AZIMUTH);
+  armGroup.add(
+    new THREE.Mesh(merge([at(new THREE.CylinderGeometry(0.42, 0.42, armLen, 24), 0, 0, 0, armQ).translate(
+      armFrom.x + (armDir.x * armLen) / 2,
+      0,
+      armFrom.z + (armDir.z * armLen) / 2,
+    )]), chrome),
+    new THREE.Mesh(
+      merge([
+        at(new RoundedBoxGeometry(2.8, 2.8, 2.8, 3, 0.45), armFrom.x, armFrom.y, armFrom.z, new THREE.Quaternion().setFromAxisAngle(up, -Math.atan2(armDir.z, armDir.x))),
+        knobPart(0.75, 0.55, 1.4, 18, knob1At, knob1Q),
+        knobPart(0.75, 0.55, 1.4, 18, knob2At, knob2Q),
+      ]),
+      castIron,
+    ),
+    new THREE.Mesh(
+      merge([
+        knobPart(0.22, 1.2, 0.6, 12, knob1At, knob1Q),
+        knobPart(0.22, 1.2, 0.6, 12, knob2At, knob2Q),
+        at(new THREE.TorusGeometry(0.5, 0.11, 10, 32), CUP_X, -0.55, 0, armHookQ),
+      ]),
+      steel,
+    ),
+  );
 
   const scale = new THREE.Group();
   scale.rotation.y = VIEW_AZIMUTH;
   rig.add(scale);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.1, 10, 28), steel);
-  ring.rotation.y = Math.PI / 2;
-  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1.0, 12), steel);
-  stem.position.y = SC_TOP + 0.45;
+  const scaleSteel = new THREE.Mesh(
+    merge([
+      at(new THREE.TorusGeometry(0.55, 0.1, 10, 28), 0, 0, 0, new THREE.Quaternion().setFromAxisAngle(up, Math.PI / 2)),
+      at(new THREE.CylinderGeometry(0.12, 0.12, 1.0, 12), 0, SC_TOP + 0.45, 0),
+      at(new THREE.CylinderGeometry(0.32, 0.32, 0.5, 20), 0, SPRING_TOP, FACE_Z),
+      at(new RoundedBoxGeometry(1.2, 0.6, 0.9, 2, 0.15), 0, SC_TOP - SC_LEN + 0.3, FACE_Z - 0.1),
+    ]),
+    steel,
+  );
   const casing = new THREE.Mesh(new RoundedBoxGeometry(SC_W, SC_LEN, SC_DEPTH, 3, 0.3), anodised);
   casing.position.y = SC_TOP - SC_LEN / 2;
   const face = new THREE.Mesh(
@@ -391,71 +481,106 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
     }),
   );
   face.position.set(0, PLATE_TOP - PLATE_H / 2, SC_DEPTH / 2 + 0.01);
-  const anchor = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.5, 20), steel);
-  anchor.position.set(0, SPRING_TOP, FACE_Z);
   const cover = glassMesh(new THREE.BoxGeometry(PLATE_W + 0.2, PLATE_H + 0.2, 0.08), glass);
   cover.position.set(0, PLATE_TOP - PLATE_H / 2, FACE_Z + 0.42);
-  const guide = new THREE.Mesh(new RoundedBoxGeometry(1.2, 0.6, 0.9, 2, 0.15), steel);
-  guide.position.set(0, SC_TOP - SC_LEN + 0.3, FACE_Z - 0.1);
-  const spring = new THREE.Mesh(new THREE.BufferGeometry(), steel);
-  spring.position.set(0, 0, FACE_Z);
+  const spring = springCoil(steel, SPRING_TOP - 0.25, 4, 0.22, 0.045, 18);
+  spring.mesh.position.set(0, 0, FACE_Z);
+  // pointer, pull rod and hook move together; the hook is where the string hangs
   const pointer = new THREE.Group();
   const bar = new THREE.Mesh(
     new RoundedBoxGeometry(2.5, 0.16, 0.1, 1, 0.04),
     new THREE.MeshStandardMaterial({ color: '#d2352a', roughness: 0.35 }),
   );
-  const clamp = new THREE.Mesh(new RoundedBoxGeometry(0.6, 0.45, 0.45, 2, 0.1), steel);
   bar.position.z = 0.22;
-  pointer.add(bar, clamp);
+  const pointerSteel = new THREE.Mesh(
+    merge([
+      new RoundedBoxGeometry(0.6, 0.45, 0.45, 2, 0.1),
+      at(new THREE.CylinderGeometry(0.1, 0.1, PULL_ROD, 12), 0, -PULL_ROD / 2, -0.1),
+      at(
+        new THREE.TorusGeometry(0.5, 0.1, 10, 28, Math.PI * 1.45),
+        0,
+        -PULL_ROD - HOOK + 0.5,
+        -0.1,
+        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI * 0.78),
+      ),
+    ]),
+    steel,
+  );
+  pointer.add(bar, pointerSteel);
   pointer.position.z = FACE_Z;
-  const pull = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, PULL_ROD, 12), steel);
-  const hook = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.1, 10, 28, Math.PI * 1.45), steel);
-  hook.rotation.z = Math.PI * 0.78;
-  scale.add(ring, stem, casing, face, anchor, cover, guide, spring, pointer, pull, hook);
+  scale.add(scaleSteel, casing, face, cover, spring.mesh, pointer);
   const string = new THREE.Mesh(
     new THREE.CylinderGeometry(0.045, 0.045, STRING_LEN + 0.9, 8),
     new THREE.MeshStandardMaterial({ color: '#efeadc', roughness: 0.95 }),
   );
   rig.add(string);
-  rig.traverse((o) => {
-    if ((o as THREE.Mesh).isMesh && o !== cover.children[0] && o !== cover.children[1]) o.castShadow = true;
-  });
+  // shadows only from what is outside the casing and not already baked into the sheets
+  for (const o of [rigChrome, ...armGroup.children, scaleSteel, casing, pointerSteel, string]) o.castShadow = true;
+  // the dial close-up draws only the scale (layer 2), not the whole scene again
+  scale.traverse((o) => o.layers.enable(2));
 
   // --- the cube --------------------------------------------------------------------------------------
   const a = s.cubeSide;
-  const cube = new THREE.Mesh(new RoundedBoxGeometry(a, a, a, 5, 0.13), solids.aluminium);
-  cube.rotation.y = VIEW_AZIMUTH - 0.6;
+  const cubeYaw = VIEW_AZIMUTH - 0.6;
+  const cube = new THREE.Mesh(new RoundedBoxGeometry(a, a, a, 4, 0.13), solids.aluminium);
+  cube.rotation.y = cubeYaw;
   cube.castShadow = true;
-  const eye = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.075, 10, 24), steel);
-  eye.position.y = a / 2 + 0.4;
-  const stud = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.19, 0.2, 12), steel);
-  stud.position.y = a / 2 + 0.1;
-  cube.add(eye, stud);
+  const fittings = new THREE.Mesh(
+    merge([
+      at(new THREE.TorusGeometry(0.32, 0.075, 10, 24), 0, a / 2 + 0.4, 0),
+      at(new THREE.CylinderGeometry(0.15, 0.19, 0.2, 12), 0, a / 2 + 0.1, 0),
+    ]),
+    steel,
+  );
+  cube.add(fittings);
   scene.add(cube);
+
+  // --- bubbles and drops ------------------------------------------------------------------------
+  const beads = beadPool(40);
+  scene.add(beads.mesh);
 
   // --- force arrows ------------------------------------------------------------------------------
   const arrows = new THREE.Group();
   arrows.rotation.y = VIEW_AZIMUTH;
   scene.add(arrows);
-  const arrowG = forceArrow('#1d1d1f');
-  const arrowFb = forceArrow('#0071e3');
-  const arrowFt = forceArrow('#8e8e93');
-  const arrowN = forceArrow('#8e8e93');
-  arrows.add(arrowG.group, arrowFb.group, arrowFt.group, arrowN.group);
+  // G, F浮, F拉, F支
+  const forces = forceArrows(['#44454b', '#0071e3', '#8e8e93', '#8e8e93']);
+  arrows.add(forces.group);
   arrows.traverse((o) => o.layers.set(1));
 
   // --- dial close-up camera ------------------------------------------------------------------------
   const insetCam = new THREE.PerspectiveCamera(22, 1, 1, 200);
+  insetCam.layers.set(2);
+  key.layers.enable(2);
+  rim.layers.enable(2);
+  const insetOffset = viewDir.clone().setY(0).normalize().multiplyScalar(15).add(new THREE.Vector3(0, 0.8, 0));
   let inset: InsetRect | null = null;
 
-  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __lab: { scene, renderer, THREE } });
+  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __lab: { scene, renderer } });
+
+  // --- quality --------------------------------------------------------------------------------------
+  const liquidSwaps: [THREE.Mesh, THREE.Material, THREE.Material][] = [
+    [cupLiquid.mesh, liquidMat, liquidLite],
+    [spoutLiquid, liquidMat, liquidLite],
+    [bWater.mesh, liquidMat, liquidLite],
+    [stream.mesh, liquidMat, liquidLite],
+    [cupLiquidTop, cupTop, cupTopLite],
+    [bWaterTop, beakerTop, beakerTopLite],
+  ];
+  let tier = 0;
+  function applySize() {
+    const t = TIERS[tier];
+    const pr = Math.min(window.devicePixelRatio || 1, t.dpr, Math.sqrt(t.pixels / Math.max(1, size.w * size.h)));
+    renderer.setPixelRatio(pr);
+    renderer.setSize(size.w, size.h, false);
+  }
 
   // --- api ---------------------------------------------------------------------------------------------
   const tmp = new THREE.Vector3();
   const tips = { G: new THREE.Vector3(), Fb: new THREE.Vector3(), Ft: new THREE.Vector3(), N: new THREE.Vector3() };
   const cupAnchor = new THREE.Vector3(CUP_X - R - 0.6, CUP_HEIGHT - 1.5, 0);
-  let streamAmount = 0;
-  let springLen = -1;
+  const anchorSet = { G: tips.G, Fb: tips.Fb, Ft: tips.Ft, N: tips.N, cup: cupAnchor };
+  const streamStart = spoutEnd.clone().addScaledVector(spoutDir, 0.2);
   let cupLevel = -1;
   let beakerLevel = -1;
   let size = { w: 1, h: 1 };
@@ -464,12 +589,24 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
   let lift = 0; // extra height framed when the rig is raised
   let mode: Mode = 'weigh';
   let perN = 2;
+  // what the water did last frame, for ripples, bubbles and the overflow
+  let lastTime = -1;
+  let lastSub = 0;
+  let lastLevel = 0;
+  let lastBottom = 0;
+  let lastBeaker = 0;
+  let flow = 0; // cm³/s into the beaker, smoothed
+  let cupEmitAt = -9;
+  let beakerEmitAt = -9;
+  let dropClock = 0;
 
   function update(f: SceneFrame) {
     const bottomWorld = CUP_FLOOR + f.cubeBottom;
     cube.position.set(CUP_X, bottomWorld + a / 2, 0);
     const hasScale = mode !== 'float';
     let top = bottomWorld + a + 2;
+    const dt = lastTime < 0 ? 0 : Math.min(Math.max(f.time - lastTime, 0), 0.05);
+    lastTime = f.time;
 
     if (hasScale) {
       // hang the chain from the cube up: cube → string → hook → pull rod → pointer
@@ -482,19 +619,12 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
       armGroup.position.y = ringY + 1.1;
       string.position.set(CUP_X, knot + STRING_LEN / 2, 0);
       pointer.position.y = pointerY;
-      pull.position.set(0, pointerY - PULL_ROD / 2, FACE_Z - 0.1);
-      hook.position.set(0, hookY + 0.5, FACE_Z - 0.1);
-      const len = SPRING_TOP - 0.25 - (pointerY + 0.2);
-      if (Math.abs(len - springLen) > 0.01) {
-        springLen = len;
-        spring.geometry.dispose();
-        spring.geometry = helix(SPRING_TOP - 0.25, len, 0.22, 0.045, 18);
-      }
+      spring.setLength(SPRING_TOP - 0.25 - (pointerY + 0.2));
       top = ringY;
       if (inset) {
         scale.updateMatrixWorld();
         const p = scale.localToWorld(tmp.set(0, pointerY, SC_DEPTH / 2));
-        insetCam.position.copy(p).addScaledVector(viewDir.clone().setY(0).normalize(), 15).add(new THREE.Vector3(0, 0.8, 0));
+        insetCam.position.copy(p).add(insetOffset);
         insetCam.lookAt(p);
       }
     }
@@ -509,38 +639,83 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
     const lvl = Math.max(f.level, 0.01);
     if (Math.abs(lvl - cupLevel) > 0.003) {
       cupLevel = lvl;
-      setColumn(cupLiquid, R - 0.02, lvl, 128);
-      cupLiquid.position.y = CUP_FLOOR + lvl / 2;
+      cupLiquid.set(lvl);
+      cupLiquid.mesh.position.y = CUP_FLOOR + lvl / 2;
     }
     cupLiquidTop.position.y = CUP_FLOOR + lvl;
     meniscus.position.y = CUP_FLOOR + lvl;
     ripple.offset.set(f.time * 0.012, f.time * 0.009);
     spoutLiquid.visible = hasScale && f.level >= s.spoutHeight - 0.05;
 
+    // the block breaking the surface sends rings out from its sides, and
+    // drags a few bubbles under with it
+    const sub = THREE.MathUtils.clamp(f.level - f.cubeBottom, 0, a);
+    if (dt > 0) {
+      const dSub = (sub - lastSub) / dt;
+      const stir = Math.abs(dSub) + 3 * Math.abs((lvl - lastLevel) / dt) + (sub > 0 ? 0.15 * Math.abs((f.cubeBottom - lastBottom) / dt) : 0);
+      if (stir > 0.6 && f.time - cupEmitAt > 0.16) {
+        cupEmitAt = f.time;
+        cupWaves.emit(0, 0, THREE.MathUtils.clamp(stir / 25, 0.05, 1), f.time, a * 0.62);
+      }
+      if (dSub > 2 && sub < a) {
+        const n = Math.min(4, Math.floor(dSub * dt * 5 + Math.random()));
+        for (let i = 0; i < n; i++) spawnBubble(bottomWorld + Math.random() * 0.4);
+      }
+      if (lastSub < a - 1e-3 && sub >= a - 1e-3) {
+        for (let i = 0; i < 5; i++) spawnBubble(bottomWorld + a + Math.random() * 0.3);
+      }
+    }
+    lastSub = sub;
+    lastLevel = lvl;
+    lastBottom = f.cubeBottom;
+    cupWaves.uniforms.uTime.value = f.time;
+
     // beaker
     const bh = f.beakerWater / (Math.PI * (BR - 0.02) ** 2);
-    bWater.visible = bWaterTop.visible = f.beakerWater > 0.5;
+    bWater.mesh.visible = bWaterTop.visible = f.beakerWater > 0.5;
     if (Math.abs(bh - beakerLevel) > 0.003) {
       beakerLevel = bh;
-      setColumn(bWater, BR - 0.02, Math.max(bh, 0.01), 96);
-      bWater.position.y = BEAKER_FLOOR + bh / 2;
+      bWater.set(Math.max(bh, 0.01));
+      bWater.mesh.position.y = BEAKER_FLOOR + bh / 2;
     }
     bWaterTop.position.y = BEAKER_FLOOR + bh;
+    beakerWaves.uniforms.uTime.value = f.time;
 
-    // overflow stream
-    streamAmount += ((f.overflowing ? 1 : 0) - streamAmount) * 0.25;
-    stream.visible = streamAmount > 0.03;
-    if (stream.visible) {
-      const yEnd = BEAKER_FLOOR + Math.max(bh, 0);
-      const start = spoutEnd.clone().addScaledVector(spoutDir, 0.2);
-      const pts: THREE.Vector3[] = [];
-      for (let i = 0; i <= 14; i++) {
-        const t = i / 14;
-        pts.push(new THREE.Vector3(start.x + t * 1.6, start.y - (start.y - yEnd) * t * t, 0));
+    // overflow: a jet when it pours, single drops when it only dribbles
+    if (dt > 0) flow += ((f.beakerWater - lastBeaker) / dt - flow) * Math.min(1, dt * 6);
+    lastBeaker = f.beakerWater;
+    if (!hasScale || f.beakerWater < lastBeaker - 1) flow = 0;
+    const waterTop = BEAKER_FLOOR + Math.max(bh, 0);
+    stream.mesh.visible = hasScale && flow > 5;
+    if (stream.mesh.visible) {
+      const landX = stream.shape(streamStart, spoutDir, flow, waterTop, BEAKER_X + BR * 0.35);
+      if (f.time - beakerEmitAt > 0.1 && f.beakerWater > 0.5) {
+        beakerEmitAt = f.time;
+        beakerWaves.emit(landX - BEAKER_X, 0, THREE.MathUtils.clamp(flow / 30, 0.15, 0.6), f.time, 0.25);
       }
-      stream.geometry.dispose();
-      stream.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 32, 0.2 * streamAmount + 0.04, 12);
+    } else if (hasScale && flow > 0.05) {
+      dropClock += dt * Math.min(flow / 0.6, 12);
+      while (dropClock >= 1) {
+        dropClock -= 1;
+        beads.spawn(1, streamStart.x, streamStart.y - 0.1, 0, spoutDir.x * 6, spoutDir.y * 6, 0, 0.12 + Math.random() * 0.05);
+      }
     }
+    beads.step(dt, (b) => {
+      if (b.kind === 0) {
+        // a bubble pops at the surface
+        if (b.y >= CUP_FLOOR + lvl - b.r) {
+          cupWaves.emit(b.x - CUP_X, -b.z, 0.08, f.time, 0.1);
+          return false;
+        }
+        return true;
+      }
+      if (b.y <= waterTop && Math.abs(b.x - BEAKER_X) < BR) {
+        if (f.beakerWater > 0.5) beakerWaves.emit(b.x - BEAKER_X, -b.z, 0.25, f.time, 0.15);
+        return false;
+      }
+      return b.y > 0;
+    });
+    beads.mesh.visible = hasScale || beads.live > 0;
 
     cupCaustic.uniforms.uTime.value = f.time;
     beakerCaustic.uniforms.uTime.value = f.time;
@@ -551,16 +726,30 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
     const { G, Fb, Ft, N } = f.forces;
     const wantPerN = THREE.MathUtils.clamp(7 / Math.max(G, Fb + Ft + N, 0.1), 0.6, 6);
     perN += (wantPerN - perN) * 0.15;
-    arrowG.set(tmp.set(0, 0, 0), -1, G * perN);
-    arrowFb.set(tmp.set(-1.1, 0, 0), 1, Fb * perN);
-    arrowFt.set(tmp.set(1.1, 0, 0), 1, Ft * perN);
-    arrowN.set(tmp.set(1.1, 0, 0), 1, N * perN);
+    forces.set(0, 0, -1, G * perN);
+    forces.set(1, -1.1, 1, Fb * perN);
+    forces.set(2, 1.1, 1, Ft * perN);
+    forces.set(3, 1.1, 1, N * perN);
     arrows.position.copy(cube.position).addScaledVector(viewDir, a * 0.75);
     arrows.updateMatrixWorld();
     arrows.localToWorld(tips.G.set(0, -G * perN, 0));
     arrows.localToWorld(tips.Fb.set(-1.1, Fb * perN, 0));
     arrows.localToWorld(tips.Ft.set(1.1, Ft * perN, 0));
     arrows.localToWorld(tips.N.set(1.1, N * perN, 0));
+  }
+
+  /** A bubble just outside one of the block's side faces, at height y. */
+  function spawnBubble(y: number) {
+    const u = (Math.random() - 0.5) * a;
+    const out = a / 2 + 0.12;
+    const k = Math.floor(Math.random() * 4);
+    const lx = k === 0 ? out : k === 1 ? -out : u;
+    const lz = k === 2 ? out : k === 3 ? -out : u;
+    const c = Math.cos(cubeYaw);
+    const sn = Math.sin(cubeYaw);
+    const x = CUP_X + lx * c + lz * sn;
+    const z = -lx * sn + lz * c;
+    beads.spawn(0, x, y, z, 0, 14 + Math.random() * 10, 0, 0.05 + Math.random() * 0.1);
   }
 
   function frame(w: number, h: number, free: FreeArea) {
@@ -594,12 +783,14 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
       mode = m;
       const scaled = m !== 'float';
       // without the scale the overflow cup becomes a plain glass of liquid
-      rig.visible = catcher.visible = spout.visible = spoutLip.visible = scaled;
-      eye.visible = stud.visible = scaled;
-      arrowFt.group.visible = scaled;
-      arrowN.group.visible = !scaled;
+      rig.visible = catcher.visible = spout.visible = scaled;
+      fittings.visible = scaled;
+      forces.show(2, scaled);
+      forces.show(3, !scaled);
       view = scaled ? RIG : CUP_ONLY;
       lift = 0;
+      flow = 0;
+      beads.clear();
       frame(size.w, size.h, lastFree);
     },
     setSolid(id) {
@@ -607,10 +798,11 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
     },
     setLiquid(id) {
       const [color, dist] = liquidLooks[id];
-      for (const m of [liquidMat, liquidTop]) {
+      for (const m of [liquidMat, cupTop, beakerTop]) {
         m.attenuationColor.set(color);
         m.attenuationDistance = dist;
       }
+      for (const m of [liquidLite, cupTopLite, beakerTopLite]) m.color.set(color);
     },
     setArrows(on) {
       arrows.visible = on;
@@ -622,13 +814,37 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
         insetCam.updateProjectionMatrix();
       }
     },
+    setQuality(n) {
+      tier = THREE.MathUtils.clamp(Math.round(n), 0, TIERS.length - 1);
+      const t = TIERS[tier];
+      applySize();
+      const shadows = t.shadow > 0;
+      if (shadows !== renderer.shadowMap.enabled) {
+        renderer.shadowMap.enabled = shadows;
+        scene.traverse((o) => {
+          const m = (o as THREE.Mesh).material;
+          if (m) (Array.isArray(m) ? m : [m]).forEach((x) => (x.needsUpdate = true));
+        });
+        for (const m of Object.values(solids)) m.needsUpdate = true;
+      }
+      if (shadows && key.shadow.mapSize.x !== t.shadow) {
+        key.shadow.mapSize.set(t.shadow, t.shadow);
+        key.shadow.map?.dispose();
+        key.shadow.map = null;
+      }
+      renderer.transmissionResolutionScale = t.transmission || 1;
+      for (const c of caustics) c.visible = t.extras;
+      cover.visible = t.extras;
+      for (const [mesh, full, lite] of liquidSwaps) mesh.material = t.transmission ? full : lite;
+    },
     resize(w, h, free) {
       size = { w, h };
       lastFree = free;
-      renderer.setSize(w, h, false);
+      applySize();
       frame(w, h, free);
     },
     render() {
+      renderer.info.reset();
       renderer.render(scene, camera);
       if (inset && mode !== 'float') {
         const y = size.h - inset.y - inset.h;
@@ -643,15 +859,36 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
       }
     },
     anchors() {
-      return { ...tips, cup: cupAnchor };
+      return anchorSet;
     },
     cmPerPixel() {
       return cmPerPx;
+    },
+    info() {
+      const r = renderer.info.render;
+      return { calls: r.calls, triangles: r.triangles, dpr: renderer.getPixelRatio() };
     },
   };
 }
 
 // -----------------------------------------------------------------------------------------------------
+
+/** Place a geometry: optional rotation first, then a move. */
+function at(geo: THREE.BufferGeometry, x: number, y: number, z: number, q?: THREE.Quaternion): THREE.BufferGeometry {
+  if (q) geo.applyQuaternion(q);
+  return geo.translate(x, y, z);
+}
+
+/** Parts that share a material and never move apart are drawn as one mesh. */
+function merge(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  for (const g of geos) for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k);
+  // mergeGeometries needs all indexed or none (lathes and tubes are, extrusions aren't)
+  if (geos.some((g) => !g.index)) geos = geos.map((g) => (g.index ? g.toNonIndexed() : g));
+  const m = mergeGeometries(geos);
+  if (!m) throw new Error('merge failed');
+  for (const g of geos) g.dispose();
+  return m;
+}
 
 /** A bright studio with softboxes, used only to light reflections. */
 function studioEnvironment(): THREE.Scene {
@@ -676,7 +913,7 @@ function studioEnvironment(): THREE.Scene {
       new THREE.PlaneGeometry(w, h),
       new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffffff').multiplyScalar(power), side: THREE.DoubleSide }),
     );
-    m.position.set(...pos);
+    m.position.set(pos[0], pos[1], pos[2]);
     m.lookAt(0, 0, 0);
     env.add(m);
   };
@@ -759,6 +996,13 @@ function addDecal(
   m.renderOrder = 1;
   parent.add(m);
   return m;
+}
+
+/** A baked shadow sheet covering the whole table top. */
+function tableDecal(parent: THREE.Object3D, map: THREE.Texture, y: number) {
+  const w = TABLE.x1 - TABLE.x0;
+  const d = TABLE.z1 - TABLE.z0;
+  return addDecal(parent, map, TABLE.x0 + w / 2, TABLE.z0 + d / 2, w, d, 0, 1, y);
 }
 
 // Clear glass is mostly what it reflects plus darker edges where you look
@@ -856,70 +1100,379 @@ function causticMaterial(color: THREE.ColorRepresentation, strength: number) {
   });
 }
 
-function setColumn(mesh: THREE.Mesh, radius: number, height: number, segments: number) {
-  mesh.geometry.dispose();
-  mesh.geometry = new THREE.CylinderGeometry(radius, radius, height, segments, 1, true);
+/** An open cylinder of liquid whose height is changed in place, centred on its origin. */
+function column(radius: number, segments: number, material: THREE.Material) {
+  const geo = new THREE.CylinderGeometry(radius, radius, 1, segments, 1, true);
+  const pos = geo.attributes.position as THREE.BufferAttribute;
+  const sign = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) sign[i] = Math.sign(pos.getY(i));
+  pos.setUsage(THREE.DynamicDrawUsage);
+  const mesh = new THREE.Mesh(geo, material);
+  return {
+    mesh,
+    set(height: number) {
+      for (let i = 0; i < pos.count; i++) pos.setY(i, (sign[i] * height) / 2);
+      pos.needsUpdate = true;
+      geo.computeBoundingSphere();
+    },
+  };
 }
 
-function helix(top: number, length: number, radius: number, wire: number, coils: number): THREE.TubeGeometry {
-  const pts: THREE.Vector3[] = [];
-  const n = coils * 16;
-  for (let i = 0; i <= n; i++) {
-    const t = i / n;
-    const ang = t * coils * Math.PI * 2;
-    pts.push(new THREE.Vector3(Math.cos(ang) * radius, top - t * length, Math.sin(ang) * radius));
+/**
+ * Rings spreading over a liquid surface, drawn by tilting its normals (no
+ * extra geometry). Each emit starts a ring at (x, y) on the disc, in cm.
+ */
+function rippleField(radius: number) {
+  const SLOTS = 8;
+  const drops: THREE.Vector4[] = [];
+  const starts: number[] = [];
+  for (let i = 0; i < SLOTS; i++) {
+    drops.push(new THREE.Vector4(0, 0, -100, 0));
+    starts.push(0.1);
   }
-  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), n, wire, 6);
+  let next = 0;
+  const uniforms = {
+    uTime: { value: 0 },
+    uRadius: { value: radius },
+    uDrops: { value: drops },
+    uStart: { value: starts },
+  };
+  return {
+    uniforms,
+    emit(x: number, y: number, amp: number, time: number, r0: number) {
+      drops[next].set(x, y, time, amp);
+      starts[next] = r0;
+      next = (next + 1) % SLOTS;
+    },
+  };
 }
 
-function knob(body: THREE.Material, metal: THREE.Material): THREE.Group {
-  // a thumbscrew: short threaded shaft with a ribbed head, pointing along +y
-  const g = new THREE.Group();
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.2, 12), metal);
-  shaft.position.y = 0.6;
-  const head = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.55, 18), body);
-  head.position.y = 1.4;
-  g.add(shaft, head);
-  return g;
+function withRipples<M extends THREE.MeshStandardMaterial>(material: M, field: ReturnType<typeof rippleField>): M {
+  material.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, field.uniforms);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vRipple;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvRipple = uv;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        '#include <common>',
+        /* glsl */ `#include <common>
+        varying vec2 vRipple;
+        uniform float uTime;
+        uniform float uRadius;
+        uniform vec4 uDrops[8];
+        uniform float uStart[8];
+        // capillary-gravity rings: a short wave packet running outwards at
+        // ~18 cm/s, fading with time and spreading as 1/sqrt(r)
+        vec2 rippleSlope(vec2 uv) {
+          vec2 p = (uv * 2.0 - 1.0) * uRadius;
+          vec2 g = vec2(0.0);
+          for (int i = 0; i < 8; i++) {
+            vec4 d = uDrops[i];
+            float age = uTime - d.z;
+            if (age < 0.0 || age > 3.0) continue;
+            vec2 q = p - d.xy;
+            float r = length(q) + 1e-3;
+            float x = r - uStart[i] - 18.0 * age;
+            float env = exp(-x * x * 1.2) * exp(-age * 1.6) * sqrt(uStart[i] / max(r, uStart[i]));
+            g += d.w * 0.35 * 5.7 * cos(5.7 * x) * env * (q / r);
+          }
+          return g;
+        }`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        THREE.ShaderChunk.normal_fragment_maps.replace('mapN.xy *= normalScale;', 'mapN.xy *= normalScale;\n\tmapN.xy -= rippleSlope(vRipple);'),
+      );
+  };
+  material.customProgramCacheKey = () => 'ripples';
+  return material;
 }
 
-function forceArrow(color: string) {
-  // flat arrow with a white halo, drawn over everything
-  const fill = new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false, transparent: true });
-  const edge = new THREE.MeshBasicMaterial({
-    color: '#ffffff',
-    depthTest: false,
-    depthWrite: false,
-    transparent: true,
-    side: THREE.BackSide,
+/** Wire coil of a spring that stretches in place: the turns spread, the wire stays round. */
+function springCoil(material: THREE.Material, top: number, refLen: number, radius: number, wire: number, coils: number) {
+  const n = coils * 12;
+  const radial = 6;
+  const pts: THREE.Vector3[] = [];
+  const centre = (t: number, len: number, v: THREE.Vector3) => {
+    const ang = t * coils * Math.PI * 2;
+    return v.set(Math.cos(ang) * radius, top - t * len, Math.sin(ang) * radius);
+  };
+  for (let i = 0; i <= n; i++) pts.push(centre(i / n, refLen, new THREE.Vector3()));
+  const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), n, wire, radial);
+  const pos = geo.attributes.position as THREE.BufferAttribute;
+  pos.setUsage(THREE.DynamicDrawUsage);
+  const offset = new Float32Array(pos.count * 3);
+  const tOf = new Float32Array(pos.count);
+  const c = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    const t = Math.floor(i / (radial + 1)) / n;
+    tOf[i] = t;
+    centre(t, refLen, c);
+    offset[i * 3] = pos.getX(i) - c.x;
+    offset[i * 3 + 1] = pos.getY(i) - c.y;
+    offset[i * 3 + 2] = pos.getZ(i) - c.z;
+  }
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.frustumCulled = false;
+  let current = refLen;
+  return {
+    mesh,
+    setLength(len: number) {
+      if (Math.abs(len - current) < 0.005) return;
+      current = len;
+      for (let i = 0; i < pos.count; i++) {
+        centre(tOf[i], len, c);
+        pos.setXYZ(i, c.x + offset[i * 3], c.y + offset[i * 3 + 1], c.z + offset[i * 3 + 2]);
+      }
+      pos.needsUpdate = true;
+    },
+  };
+}
+
+/**
+ * The overflow as a falling jet: a projectile from the spout lip whose radius
+ * follows continuity (flow = π r² v), so it thins as it speeds up.
+ */
+function streamMesh(material: THREE.Material) {
+  const RINGS = 24;
+  const SIDES = 10;
+  const count = (RINGS + 1) * (SIDES + 1);
+  const pos = new Float32Array(count * 3);
+  const nor = new Float32Array(count * 3);
+  const idx: number[] = [];
+  for (let i = 0; i < RINGS; i++) {
+    for (let j = 0; j < SIDES; j++) {
+      const a = i * (SIDES + 1) + j;
+      const b = a + SIDES + 1;
+      idx.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(count * 2), 2));
+  geo.setIndex(idx);
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.frustumCulled = false;
+  return {
+    mesh,
+    /** Shape the jet for a flow (cm³/s) landing on a surface at yEnd; returns where it lands. */
+    shape(start: THREE.Vector3, dir: THREE.Vector3, flow: number, yEnd: number, maxX: number): number {
+      const drop = Math.max(start.y - yEnd, 0.5);
+      // the fastest the water can leave and still land before maxX
+      const reach = maxX - start.x;
+      const slope = -dir.y / dir.x;
+      const room = drop - reach * slope;
+      const vMax = room > 0 ? Math.sqrt((G_CM * reach * reach) / (2 * dir.x * dir.x * room)) : 6;
+      const v0 = Math.min(6 + flow * 0.9, vMax);
+      const vx = v0 * dir.x;
+      const vy = v0 * dir.y;
+      const tEnd = (vy + Math.sqrt(vy * vy + 2 * G_CM * drop)) / G_CM;
+      for (let i = 0; i <= RINGS; i++) {
+        const t = (tEnd * i) / RINGS;
+        const px = start.x + vx * t;
+        const py = start.y + vy * t - 0.5 * G_CM * t * t;
+        const ux = vx;
+        const uy = vy - G_CM * t;
+        const sp = Math.hypot(ux, uy);
+        const r = Math.min(Math.max(Math.sqrt(flow / (Math.PI * sp)) * 0.85, 0.035), 0.3);
+        // ring frame: in-plane normal and z
+        const nx = -uy / sp;
+        const ny = ux / sp;
+        for (let j = 0; j <= SIDES; j++) {
+          const th = (j / SIDES) * Math.PI * 2;
+          const cx = Math.cos(th);
+          const sz = Math.sin(th);
+          const k = (i * (SIDES + 1) + j) * 3;
+          nor[k] = cx * nx;
+          nor[k + 1] = cx * ny;
+          nor[k + 2] = sz;
+          pos[k] = px + r * nor[k];
+          pos[k + 1] = py + r * nor[k + 1];
+          pos[k + 2] = r * sz;
+        }
+      }
+      geo.attributes.position.needsUpdate = true;
+      geo.attributes.normal.needsUpdate = true;
+      return start.x + vx * tEnd;
+    },
+  };
+}
+
+interface Bead {
+  kind: 0 | 1; // 0 bubble rising in the cup, 1 drop falling from the spout
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  r: number;
+  phase: number;
+}
+
+/**
+ * Bubbles and drops: little silvery beads, all in one instanced draw. They are
+ * opaque on purpose so the liquid's transmission pass sees (and bends) them.
+ */
+function beadPool(capacity: number) {
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: /* glsl */ `
+      varying vec3 vN;
+      varying vec3 vV;
+      void main() {
+        vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+        vN = normalize(normalMatrix * mat3(instanceMatrix) * normal);
+        vV = -mv.xyz;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */ `
+      varying vec3 vN;
+      varying vec3 vV;
+      void main() {
+        vec3 n = normalize(vN);
+        vec3 v = normalize(vV);
+        float rim = pow(1.0 - max(dot(n, v), 0.0), 2.0);
+        float spec = pow(max(dot(n, normalize(v + vec3(-0.35, 0.8, 0.45))), 0.0), 40.0);
+        vec3 c = mix(vec3(0.80, 0.88, 0.90), vec3(0.98), rim) + spec;
+        gl_FragColor = vec4(c, 1.0);
+        #include <colorspace_fragment>
+      }`,
   });
-  const shaftGeo = new THREE.CylinderGeometry(0.15, 0.15, 1, 14);
-  const headGeo = new THREE.ConeGeometry(0.48, 1.15, 24);
-  const shaft = new THREE.Mesh(shaftGeo, fill);
-  const head = new THREE.Mesh(headGeo, fill);
-  const shaftEdge = new THREE.Mesh(shaftGeo, edge);
-  const headEdge = new THREE.Mesh(headGeo, edge);
-  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 8), fill);
+  const mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 8), mat, capacity);
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  mesh.frustumCulled = false;
+  mesh.count = 0;
+  const pool: Bead[] = [];
+  for (let i = 0; i < capacity; i++) pool.push({ kind: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, r: 0, phase: 0 });
+  let live = 0;
+  let clock = 0;
+  const m = new THREE.Matrix4();
+  return {
+    mesh,
+    get live() {
+      return live;
+    },
+    spawn(kind: 0 | 1, x: number, y: number, z: number, vx: number, vy: number, vz: number, r: number) {
+      if (live >= capacity) return;
+      const b = pool[live++];
+      b.kind = kind;
+      b.x = x;
+      b.y = y;
+      b.z = z;
+      b.vx = vx;
+      b.vy = vy;
+      b.vz = vz;
+      b.r = r;
+      b.phase = Math.random() * 6.3;
+    },
+    clear() {
+      live = 0;
+      mesh.count = 0;
+    },
+    /** Move every bead; `keep` returns false for the ones that are done. */
+    step(dt: number, keep: (b: Bead) => boolean) {
+      clock += dt;
+      let i = 0;
+      while (i < live) {
+        const b = pool[i];
+        if (b.kind === 0) {
+          // rising at terminal speed, wobbling side to side
+          b.y += b.vy * dt;
+          b.x += Math.sin(clock * 11 + b.phase) * 0.6 * dt;
+          b.z += Math.cos(clock * 9 + b.phase) * 0.6 * dt;
+        } else {
+          b.vy -= G_CM * dt;
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+          b.z += b.vz * dt;
+        }
+        if (keep(b)) {
+          m.makeScale(b.r, b.kind === 1 ? b.r * 1.25 : b.r, b.r).setPosition(b.x, b.y, b.z);
+          mesh.setMatrixAt(i, m);
+          i++;
+        } else {
+          // swap the last live bead into this slot
+          live--;
+          const last = pool[live];
+          pool[live] = b;
+          pool[i] = last;
+        }
+      }
+      mesh.count = live;
+      if (live) mesh.instanceMatrix.needsUpdate = true;
+    },
+  };
+}
+
+/** The four force arrows as two draws: every fill, then every white halo
+ *  behind them. Each arrow is an instance; its shaft is stretched in the
+ *  vertex shader, so moving or resizing one costs no geometry upload. */
+function forceArrows(colors: string[]) {
+  // template along +y: shaft 0..1, head 1..2.15, dot at the origin
+  const parts = (shaftR: number, headR: number, headH: number, withDot: boolean) => {
+    const list: [THREE.BufferGeometry, number][] = [
+      [new THREE.CylinderGeometry(shaftR, shaftR, 1, 14).translate(0, 0.5, 0), 1],
+      [new THREE.ConeGeometry(headR, headH, 24).translate(0, 1.575, 0), 2],
+    ];
+    if (withDot) list.push([new THREE.SphereGeometry(0.28, 16, 8), 0]);
+    const kinds: number[] = [];
+    for (const [g, k] of list) for (let i = 0; i < g.attributes.position.count; i++) kinds.push(k);
+    const geo = merge(list.map(([g]) => g));
+    geo.setAttribute('kind', new THREE.Float32BufferAttribute(kinds, 1));
+    return geo;
+  };
+  const n = colors.length;
+  const lens = new THREE.InstancedBufferAttribute(new Float32Array(n), 1);
+  lens.setUsage(THREE.DynamicDrawUsage);
+  const stretch = (m: THREE.Material) => {
+    m.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float kind;\nattribute float aLen;')
+        .replace(
+          '#include <begin_vertex>',
+          `vec3 transformed = vec3(position);
+          transformed.y = kind > 1.5 ? transformed.y - 1.0 + aLen : kind > 0.5 ? transformed.y * aLen : transformed.y;`,
+        );
+    };
+    m.customProgramCacheKey = () => 'arrow';
+    return m;
+  };
+  const make = (geo: THREE.BufferGeometry, mat: THREE.Material, order: number) => {
+    geo.setAttribute('aLen', lens);
+    const mesh = new THREE.InstancedMesh(geo, stretch(mat), n);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = order;
+    return mesh;
+  };
+  const fill = make(parts(0.15, 0.48, 1.15, true), new THREE.MeshBasicMaterial({ depthTest: false, depthWrite: false, transparent: true }), 31);
+  const halo = make(
+    parts(0.24, 0.6, 1.357, false),
+    new THREE.MeshBasicMaterial({ color: '#ffffff', depthTest: false, depthWrite: false, transparent: true, side: THREE.BackSide }),
+    30,
+  );
+  const c = new THREE.Color();
+  colors.forEach((col, i) => fill.setColorAt(i, c.set(col)));
   const group = new THREE.Group();
-  group.add(shaftEdge, headEdge, shaft, head, dot);
-  shaftEdge.renderOrder = headEdge.renderOrder = 30;
-  shaft.renderOrder = head.renderOrder = dot.renderOrder = 31;
+  group.add(halo, fill);
+  const shown = colors.map(() => true);
+  const m4 = new THREE.Matrix4();
+  const flip = new THREE.Matrix4().makeRotationZ(Math.PI);
   return {
     group,
-    set(origin: THREE.Vector3, dir: 1 | -1, len: number) {
-      group.position.copy(origin);
-      const shaftLen = Math.max(len - 1.15, 0.01);
-      shaft.scale.y = shaftLen;
-      shaft.position.y = (dir * shaftLen) / 2;
-      head.position.y = dir * (shaftLen + 0.575);
-      head.rotation.z = dir === 1 ? 0 : Math.PI;
-      shaftEdge.scale.set(1.6, shaftLen, 1.6);
-      shaftEdge.position.copy(shaft.position);
-      headEdge.scale.set(1.25, 1.18, 1.25);
-      headEdge.position.copy(head.position);
-      headEdge.rotation.copy(head.rotation);
-      // hidden when the force is absent
-      shaft.visible = head.visible = shaftEdge.visible = headEdge.visible = dot.visible = len > 0.05;
+    show(i: number, on: boolean) {
+      shown[i] = on;
+    },
+    set(i: number, x: number, dir: 1 | -1, len: number) {
+      const visible = shown[i] && len > 0.05;
+      if (!visible) m4.makeScale(0, 0, 0);
+      else (dir === 1 ? m4.identity() : m4.copy(flip)).setPosition(x, 0, 0);
+      fill.setMatrixAt(i, m4);
+      halo.setMatrixAt(i, m4);
+      lens.setX(i, Math.max(len - 1.15, 0.01));
+      fill.instanceMatrix.needsUpdate = halo.instanceMatrix.needsUpdate = lens.needsUpdate = true;
     },
   };
 }

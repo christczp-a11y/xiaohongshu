@@ -265,7 +265,7 @@ export function ripple(): THREE.DataTexture {
 }
 
 /** Soft blob for contact shadows: dark centre fading to clear. */
-export function softBlob(shape: 'round' | 'rect' | 'ring', inner = 0.55): THREE.CanvasTexture {
+function blobCanvas(shape: 'round' | 'rect' | 'ring', inner = 0.55): HTMLCanvasElement {
   const S = 256;
   const [c, g] = canvas(S, S);
   if (shape === 'round') {
@@ -293,12 +293,11 @@ export function softBlob(shape: 'round' | 'rect' | 'ring', inner = 0.55): THREE.
     g.fillStyle = '#000';
     g.fillRect(pad - S * 4, pad, S - pad * 2, S - pad * 2);
   }
-  const t = new THREE.CanvasTexture(c);
-  return t;
+  return c;
 }
 
 /** Faint shadow a glass cylinder throws: a soft capsule with darker rims. */
-export function glassShadow(): THREE.CanvasTexture {
+function glassShadowCanvas(): HTMLCanvasElement {
   const W = 512;
   const H = 256;
   const [c, g] = canvas(W, H);
@@ -322,6 +321,41 @@ export function glassShadow(): THREE.CanvasTexture {
   g.moveTo(x0, H / 2 + r - H * 3);
   g.lineTo(x1, H / 2 + r * 0.94 - H * 3);
   g.stroke();
+  return c;
+}
+
+export interface ShadowItem {
+  shape: 'round' | 'rect' | 'ring' | 'glass';
+  x: number; // centre, world cm
+  z: number;
+  w: number; // footprint along the item's own x and z, cm
+  d: number;
+  yaw?: number; // rotation about +y, as Object3D.rotation.y
+  alpha: number;
+  inner?: number;
+}
+
+/**
+ * Contact shadows that never move, baked into one texture for a horizontal
+ * rectangle of the world (x0..x0+w, z0..z0+d), so they cost one draw call.
+ */
+export function shadowSheet(x0: number, z0: number, w: number, d: number, ppc: number, items: ShadowItem[]): THREE.CanvasTexture {
+  const [c, g] = canvas(Math.round(w * ppc), Math.round(d * ppc));
+  const cache = new Map<string, HTMLCanvasElement>();
+  for (const it of items) {
+    const key = `${it.shape}|${it.inner ?? 0.55}`;
+    let src = cache.get(key);
+    if (!src) {
+      src = it.shape === 'glass' ? glassShadowCanvas() : blobCanvas(it.shape, it.inner);
+      cache.set(key, src);
+    }
+    g.save();
+    g.globalAlpha = it.alpha;
+    g.translate((it.x - x0) * ppc, (it.z - z0) * ppc);
+    g.rotate(-(it.yaw ?? 0)); // canvas y runs along world +z
+    g.drawImage(src, (-it.w / 2) * ppc, (-it.d / 2) * ppc, it.w * ppc, it.d * ppc);
+    g.restore();
+  }
   return new THREE.CanvasTexture(c);
 }
 

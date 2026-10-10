@@ -1,17 +1,17 @@
 /* Swiss-poster layout, black-and-white palette, chunky press-down blocks, solid white cards.
    Colour lives only in the 3D scene. */
 :root {
-  --ink: #111111;
+  --ink: #2b2c30;          /* graphite, not pure black */
   --ink-2: #6e6e73;
   --ink-3: #a1a1a6;
   --paper: #ffffff;
   --edge: #d2d2cf;        /* solid underside of white blocks */
-  --edge-dark: #000000;   /* underside of black blocks */
-  --dark: #1d1d1f;
+  --edge-dark: #26272b;   /* underside of dark blocks */
+  --dark: #44454b;
   --chip: #f4f4f2;       /* blocks that sit on a white card */
-  --head: #111111;        /* title colour; turns white at night */
+  --head: #2b2c30;        /* title colour; turns white at night */
   --head-2: #6e6e73;
-  --bar: rgba(0, 0, 0, .1);
+  --bar: rgba(43, 44, 48, .1);
   --display: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', sans-serif;
   --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   --safe-t: 0px;
@@ -102,7 +102,7 @@ canvas { display: block; touch-action: none; }
 
 #explain { display: grid; grid-template-columns: 52px 1fr; grid-gap: 12px; align-items: start; margin: 16px 2px 14px; min-height: 66px; }
 #stageNo { font-size: 50px; line-height: .9; text-align: center; }
-#explainText { font-size: 14px; line-height: 1.65; color: #2c2c2e; padding-top: 2px; min-width: 0; }
+#explainText { font-size: 14px; line-height: 1.65; color: #3a3b40; padding-top: 2px; min-width: 0; }
 #explainText b { color: var(--ink); font-weight: 700; }
 
 #controls { display: flex; align-items: center; padding-top: 12px; border-top: 1px solid rgba(0, 0, 0, .08); }

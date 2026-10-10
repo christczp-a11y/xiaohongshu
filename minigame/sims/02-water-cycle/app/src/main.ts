@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   BOTTOM, HALF, LAKE, LAKE_R, RIVER, WL_MAX, WL_MIN,
-  distRiver, fbm, hash, heightAt, inLakeDisc, mulberry32, smooth, vnoise,
+  distRiver, fbm, heightAt, inLakeDisc, mulberry32, smooth, vnoise,
 } from './terrain';
+import { bakeBed, makeWaterMaterial, patchCloud, patchFoliage, patchTerrain, shadeByHeight, type SceneUniforms } from './look';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const rand = mulberry32(7);
@@ -38,8 +39,8 @@ if (createdRenderer) start(createdRenderer);
 else showFallback('这台设备暂时显示不了 3D 画面，先看看静态的展台吧。');
 
 function start(renderer: THREE.WebGLRenderer) {
-  renderer.toneMapping = THREE.AgXToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMapping = THREE.NeutralToneMapping;   // keeps colours truer than AgX/ACES
+  renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   document.body.prepend(renderer.domElement);
@@ -47,7 +48,24 @@ function start(renderer: THREE.WebGLRenderer) {
 
   const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  const U: SceneUniforms = { uTime: { value: 0 }, uWL: { value: 0 }, uSun: { value: 1 } };
+
+  // a physical sky (Rayleigh / Mie scattering) rendered into the reflection map, so water and
+  // leaves pick up blue sky at noon and warm light at sunset
+  const sky = new Sky();
+  sky.scale.setScalar(50);
+  const skyScene = new THREE.Scene();
+  skyScene.add(sky);
+  const skyU = sky.material.uniforms;
+  skyU.turbidity.value = 4; skyU.rayleigh.value = 1.4; skyU.mieCoefficient.value = 0.005; skyU.mieDirectionalG.value = 0.8;
+  let envRT: THREE.WebGLRenderTarget | null = null, envDirty = true, envAt = -1e9;
+  function updateEnv(now: number) {
+    envDirty = false; envAt = now;
+    const next = pmrem.fromScene(skyScene as unknown as THREE.Scene, 0.02);
+    scene.environment = next.texture;
+    if (envRT) envRT.dispose();
+    envRT = next;
+  }
 
   const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.1, 200);
   function placeCamera() {
@@ -99,15 +117,6 @@ function start(renderer: THREE.WebGLRenderer) {
     g.putImageData(img, 0, 0);
     const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat, repeat);
     return t;
-  }
-
-  // fine grain for grass and rock
-  function detailNormalMap(): THREE.CanvasTexture {
-    const N = 256, H = new Float32Array(N * N), r = mulberry32(5);
-    for (let i = 0; i < N * N; i++) H[i] = r();
-    for (let pass = 0; pass < 2; pass++) for (let y = 0; y < N; y++) for (let x = 0; x < N; x++)
-      H[y * N + x] = (H[y * N + x] * 2 + H[y * N + (x + 1) % N] + H[((y + 1) % N) * N + x]) / 4;
-    return normalMapFromHeights(N, H, 3, 24);
   }
 
   // tileable ripples: sums of sines with whole-number frequencies
@@ -173,25 +182,11 @@ function start(renderer: THREE.WebGLRenderer) {
     const p = terrainGeo.attributes.position;
     for (let i = 0; i < p.count; i++) p.setY(i, heightAt(p.getX(i), p.getZ(i)));
     terrainGeo.computeVertexNormals();
-    const n = terrainGeo.attributes.normal, col = new Float32Array(p.count * 3), c = new THREE.Color(), tmp = new THREE.Color();
-    const silt = new THREE.Color('#2f4a42'), sand = new THREE.Color('#bba979'), g1 = new THREE.Color('#3f5f27'),
-      g2 = new THREE.Color('#6d8540'), rock = new THREE.Color('#6f6b63'), rock2 = new THREE.Color('#4f4c47'), snow = new THREE.Color('#eef1f4');
-    for (let i = 0; i < p.count; i++) {
-      const x = p.getX(i), y = p.getY(i), z = p.getZ(i), ny = n.getY(i);
-      if (y < 0.33) c.copy(silt).lerp(sand, smooth(-0.45, 0.33, y));
-      else c.copy(g1).lerp(g2, fbm(x * 1.7 + 5, z * 1.7)).lerp(sand, 1 - smooth(0.33, 0.45, y));
-      tmp.copy(rock).lerp(rock2, fbm(x * 4, z * 4));
-      c.lerp(tmp, Math.max(smooth(0.86, 0.66, ny), smooth(1.4, 2.2, y)));
-      c.lerp(snow, smooth(2.75, 3.15, y) * smooth(0.5, 0.75, ny));
-      c.multiplyScalar(0.9 + 0.2 * hash(x * 37.1, z * 53.7));
-      col.set([c.r, c.g, c.b], i * 3);
-    }
-    terrainGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     return terrainGeo;
   }
-  const terrain = new THREE.Mesh(terrainGeometry(SEG), new THREE.MeshStandardMaterial({
-    vertexColors: true, roughness: 0.95, metalness: 0, normalMap: detailNormalMap(), normalScale: new THREE.Vector2(0.6, 0.6),
-  }));
+  const terrainMat = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
+  patchTerrain(terrainMat, U, { x: LAKE.x, z: LAKE.z, r: LAKE_R });
+  const terrain = new THREE.Mesh(terrainGeometry(SEG), terrainMat);
   // the land only receives shadows: casting them would double its triangles in the shadow pass
   terrain.receiveShadow = true;
   scene.add(terrain);
@@ -227,7 +222,7 @@ function start(renderer: THREE.WebGLRenderer) {
   scene.add(buildSkirt());
 
   // plain matte plinth; the floor shows only shadows so the page background shows through
-  const pedestal = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2 + 0.5, 0.9, HALF * 2 + 0.5), new THREE.MeshStandardMaterial({ color: '#f1f1ef', roughness: 0.92 }));
+  const pedestal = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2 + 0.5, 0.9, HALF * 2 + 0.5), new THREE.MeshStandardMaterial({ color: '#f1f1ef', roughness: 0.92, envMapIntensity: 0.1 }));
   pedestal.position.y = BOTTOM - 0.45; pedestal.receiveShadow = true; pedestal.castShadow = true;
   scene.add(pedestal);
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.ShadowMaterial({ opacity: 0.09 }));
@@ -235,11 +230,8 @@ function start(renderer: THREE.WebGLRenderer) {
   scene.add(floor);
 
   // ---------- lake ----------
-  const waterNormal = waterNormalMap();
-  const water = new THREE.Mesh(new THREE.CircleGeometry(LAKE_R, 64), new THREE.MeshStandardMaterial({
-    color: '#1f6f78', roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.84,
-    normalMap: waterNormal, normalScale: new THREE.Vector2(0.35, 0.35),
-  }));
+  const bed = bakeBed(heightAt, LAKE.x, LAKE.z, LAKE_R);
+  const water = new THREE.Mesh(new THREE.CircleGeometry(LAKE_R, 64), makeWaterMaterial(U, waterNormalMap(), bed.tex, bed.box, bed.range));
   water.rotation.x = -Math.PI / 2; water.position.set(LAKE.x, 0, LAKE.z); water.receiveShadow = true;
   scene.add(water);
 
@@ -284,11 +276,12 @@ function start(renderer: THREE.WebGLRenderer) {
 
   // ---------- trees and rocks ----------
   {
-    const conGeo = mergeGeometries([
-      new THREE.ConeGeometry(0.2, 0.42, 9).translate(0, 0.32, 0),
-      new THREE.ConeGeometry(0.15, 0.34, 9).translate(0, 0.55, 0),
-      new THREE.ConeGeometry(0.09, 0.24, 9).translate(0, 0.74, 0),
-    ]);
+    const conGeo = shadeByHeight(mergeGeometries([
+      new THREE.ConeGeometry(0.21, 0.36, 8).translate(0, 0.28, 0),
+      new THREE.ConeGeometry(0.17, 0.32, 8).translate(0, 0.45, 0),
+      new THREE.ConeGeometry(0.12, 0.27, 8).translate(0, 0.61, 0),
+      new THREE.ConeGeometry(0.07, 0.22, 8).translate(0, 0.76, 0),
+    ]), 0.45);
     const crownGeo = new THREE.IcosahedronGeometry(0.24, 1);
     {
       const p = crownGeo.attributes.position, v = new THREE.Vector3();
@@ -297,9 +290,11 @@ function start(renderer: THREE.WebGLRenderer) {
         p.setXYZ(i, v.x, v.y, v.z);
       }
       crownGeo.computeVertexNormals(); crownGeo.translate(0, 0.42, 0);
+      shadeByHeight(crownGeo, 0.5);
     }
     const trunkGeo = new THREE.CylinderGeometry(0.025, 0.04, 0.3, 6).translate(0, 0.15, 0);
-    const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.85 });
+    const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.8, vertexColors: true });
+    patchFoliage(leafMat);
     const trunkMat = new THREE.MeshStandardMaterial({ color: '#4a3322', roughness: 1 });
 
     const spots: [number, number, number][] = [];
@@ -334,7 +329,7 @@ function start(renderer: THREE.WebGLRenderer) {
     });
     for (const mesh of [conMesh, decMesh, trunks]) { mesh.castShadow = mesh !== trunks; mesh.receiveShadow = true; scene.add(mesh); }
 
-    const rocks = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.16, 0), new THREE.MeshStandardMaterial({ color: '#77746d', roughness: 0.9, flatShading: true }), 26);
+    const rocks = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.16, 0), new THREE.MeshStandardMaterial({ color: '#7d766b', roughness: 0.9, flatShading: true, envMapIntensity: 0.5 }), 26);
     for (let i = 0; i < 26; i++) {
       let x = 0, z = 0, h = 0;
       do { x = (rand() * 2 - 1) * (HALF - 0.3); z = (rand() * 2 - 1) * (HALF - 0.3); h = heightAt(x, z); } while (h < WL_MAX + 0.05);
@@ -370,7 +365,10 @@ function start(renderer: THREE.WebGLRenderer) {
     sunLight.color.copy(lowSun).lerp(highSun, smooth(0, 0.6, el));
     hemi.intensity = 0.12 + 0.45 * daylight;
     moonLight.intensity = 0.35 * (1 - daylight);
-    scene.environmentIntensity = 0.12 + 0.5 * daylight;
+    scene.environmentIntensity = 0.06 + 0.3 * daylight;
+    U.uSun.value = daylight;
+    skyU.sunPosition.value.copy(sunGroup.position).normalize();
+    envDirty = true;
     riverUniforms.uDay.value = 0.35 + 0.65 * daylight;
     document.body.style.background = '#' + bg.copy(nightBg).lerp(dayBg, smooth(0, 0.5, daylight)).getHexString();
     document.body.classList.toggle('night', daylight < 0.25);
@@ -399,7 +397,8 @@ function start(renderer: THREE.WebGLRenderer) {
   const cloudScale = (cl: Cloud) => 0.75 + 0.75 * cl.water;
 
   function makeCloud(x: number, z: number, w: number) {
-    const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, emissive: '#ffffff', emissiveIntensity: 0.12 });
+    const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, emissive: '#ffffff', emissiveIntensity: 0.12, envMapIntensity: 0.3 });
+    patchCloud(mat);
     const group = new THREE.Group();
     const cl: Cloud = {
       group, mat, water: w, raining: false, squeezing: false, released: false,
@@ -432,12 +431,29 @@ function start(renderer: THREE.WebGLRenderer) {
   scene.add(vaporPts);
 
   const RMAX = 1200;
-  const rain = { pos: new Float32Array(RMAX * 6), alive: new Uint8Array(RMAX) };
+  const rain = { pos: new Float32Array(RMAX * 6), vel: new Float32Array(RMAX * 3), alive: new Uint8Array(RMAX) };
   const rainGeo = new THREE.BufferGeometry();
   rainGeo.setAttribute('position', new THREE.BufferAttribute(rain.pos, 3));
   const rainLines = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: '#b7dcef', transparent: true, opacity: 0.75 }));
   rainLines.frustumCulled = false;
   scene.add(rainLines);
+
+  // expanding rings where drops hit the lake
+  const RIP = 48;
+  const ringTex = (() => {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+    const g = cv.getContext('2d')!;
+    g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = 3; g.beginPath(); g.arc(32, 32, 26, 0, 7); g.stroke();
+    return new THREE.CanvasTexture(cv);
+  })();
+  const ripples = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: ringTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }), RIP);
+  const ripAge = new Float32Array(RIP).fill(9), ripPos = new Float32Array(RIP * 2), ripM = new THREE.Matrix4(), ripC = new THREE.Color();
+  let ripNext = 0;
+  for (let i = 0; i < RIP; i++) { ripples.setMatrixAt(i, ripM.makeScale(0, 0, 0)); ripples.setColorAt(i, ripC.setScalar(0)); }
+  ripples.frustumCulled = false; ripples.renderOrder = 3;
+  scene.add(ripples);
+  function spawnRipple(x: number, z: number) { const i = ripNext++ % RIP; ripAge[i] = 0; ripPos[i * 2] = x; ripPos[i * 2 + 1] = z; }
 
   // ---------- water budget (abstract units; lake 1.0 = full) ----------
   // one vapour dot takes VAPOR_UNIT from the lake and gives VAPOR_UNIT * CLOUD_PER_UNIT to a cloud;
@@ -474,7 +490,10 @@ function start(renderer: THREE.WebGLRenderer) {
     const i = rain.alive.indexOf(0); if (i < 0) return;
     const s = cloudScale(cl), a = rand() * 6.283, r = Math.sqrt(rand()) * 0.75 * s;
     const x = cl.group.position.x + Math.cos(a) * r, z = cl.group.position.z + Math.sin(a) * r, y = cl.group.position.y - 0.25 * s;
-    rain.alive[i] = 1; rain.pos.set([x, y, z, x, y - 0.18, z], i * 6);
+    rain.alive[i] = 1; rain.pos.set([x, y, z, x, y - 0.05, z], i * 6);
+    // drops leave the cloud with its sideways motion and start slow
+    const vx = cl.target ? 0 : cl.drift.x, vz = cl.target ? 0 : cl.drift.y;
+    rain.vel.set([vx, -1.5 - rand(), vz], i * 3);
   }
 
   // ---------- interaction: drag a cloud, hold it to squeeze out rain ----------
@@ -619,7 +638,8 @@ function start(renderer: THREE.WebGLRenderer) {
       const x = vapor.pos[o], y = vapor.pos[o + 1], z = vapor.pos[o + 2];
       const cl = nearestCloud(x, z), cp = cl.group.position;
       const pull = smooth(1.0, 3.5, y) * 0.9;
-      vapor.vel[o] += ((cp.x - x) * pull + Math.sin(T * 2 + i) * 0.05) * dt;
+      vapor.vel[o] += ((cp.x - x) * pull + Math.sin(T * 1.7 + y * 3 + i) * 0.12) * dt;
+      vapor.vel[o + 1] += (Math.cos(T * 1.3 + x * 4) * 0.08 - (vapor.vel[o + 1] - 0.7) * 0.5) * dt;
       vapor.vel[o + 2] += (cp.z - z) * pull * dt;
       vapor.pos[o] += vapor.vel[o] * dt; vapor.pos[o + 1] += vapor.vel[o + 1] * dt; vapor.pos[o + 2] += vapor.vel[o + 2] * dt;
       vapor.col[o] = vapor.col[o + 1] = vapor.col[o + 2] = Math.min(1, vapor.life[i] * 2) * 0.9;
@@ -665,16 +685,30 @@ function start(renderer: THREE.WebGLRenderer) {
     const wl = lakeLevel();
     for (let i = 0; i < RMAX; i++) {
       if (!rain.alive[i]) continue;
-      const o = i * 6, x = rain.pos[o], z = rain.pos[o + 2];
-      rain.pos[o + 1] -= 7 * dt; rain.pos[o + 4] -= 7 * dt;
+      const o = i * 6, v = i * 3;
+      // gravity until drag balances it (terminal speed); the streak is the distance covered in ~1/40 s
+      rain.vel[v + 1] = Math.max(-7.5, rain.vel[v + 1] - 18 * dt);
+      rain.pos[o] += rain.vel[v] * dt; rain.pos[o + 1] += rain.vel[v + 1] * dt; rain.pos[o + 2] += rain.vel[v + 2] * dt;
+      rain.pos[o + 3] = rain.pos[o] - rain.vel[v] * 0.025; rain.pos[o + 4] = rain.pos[o + 1] - rain.vel[v + 1] * 0.025; rain.pos[o + 5] = rain.pos[o + 2] - rain.vel[v + 2] * 0.025;
+      const x = rain.pos[o], z = rain.pos[o + 2];
       const g = heightAt(x, z), onLake = inLakeDisc(x, z) && g < wl;
       const floorY = onLake ? wl : (Math.abs(x) > HALF || Math.abs(z) > HALF ? BOTTOM : g);
-      if (rain.pos[o + 4] <= floorY) {
+      if (rain.pos[o + 1] <= floorY) {
         rain.alive[i] = 0; rain.pos[o + 1] = rain.pos[o + 4] = -100;
-        if (onLake) lake += VAPOR_UNIT; else soil += VAPOR_UNIT;
+        if (onLake) { lake += VAPOR_UNIT; if (rand() < 0.5) spawnRipple(x, z); } else soil += VAPOR_UNIT;
       }
     }
     rainGeo.attributes.position.needsUpdate = true;
+
+    for (let i = 0; i < RIP; i++) {
+      if (ripAge[i] > 1) continue;
+      ripAge[i] += dt * 1.4;
+      const k = Math.min(1, ripAge[i]), sz = 0.04 + k * 0.32;
+      ripples.setMatrixAt(i, ripM.makeScale(sz, 1, sz).setPosition(ripPos[i * 2], wl + 0.006, ripPos[i * 2 + 1]));
+      ripples.setColorAt(i, ripC.setScalar((1 - k) * 0.55));
+    }
+    ripples.instanceMatrix.needsUpdate = true;
+    if (ripples.instanceColor) ripples.instanceColor.needsUpdate = true;
 
     // water on the slopes drains down the river back into the lake
     const drain = soil * 0.18 * dt;
@@ -683,7 +717,7 @@ function start(renderer: THREE.WebGLRenderer) {
     if (flow > 0.12) recent.flow = now;
     riverUniforms.uFlow.value += (Math.max(0.12, flow) - riverUniforms.uFlow.value) * Math.min(1, dt * 2);
     riverUniforms.uTime.value = T;
-    waterNormal.offset.set(T * 0.012, T * 0.008);
+    U.uTime.value = T; U.uWL.value = water.position.y;
 
     // panel: light up what is happening now, explain the newest stage
     uiTick += dt;
@@ -701,6 +735,7 @@ function start(renderer: THREE.WebGLRenderer) {
       meter(mSoil, nSoil, soil * 4);
     }
 
+    if (envDirty && now - envAt > (playing ? 1500 : 250)) updateEnv(now);
     controls.update();
     renderer.render(scene, camera);
   }

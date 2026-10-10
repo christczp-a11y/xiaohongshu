@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<title>水去哪儿了</title>
+<link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+<div id="loading">正在搭建小世界…</div>
+
+<div id="top">
+  <div id="title" class="card">
+    <div class="eyebrow">水循环 · 动手看</div>
+    <h1>水去哪儿了？</h1>
+  </div>
+  <div id="meters" class="card">
+    <div class="meter">湖里的水<div class="bar"><div id="mLake" class="fill"></div></div></div>
+    <div class="meter">云里的水<div class="bar"><div id="mCloud" class="fill"></div></div></div>
+    <div class="meter">山坡上的水<div class="bar"><div id="mSoil" class="fill"></div></div></div>
+  </div>
+</div>
+
+<div id="hint">拖动<b>云朵</b>换地方 · <b>按住</b>云朵能挤出雨</div>
+
+<div id="panel" class="card">
+  <div id="chips">
+    <button class="chip" data-k="evap">蒸发<small>水变成汽</small></button>
+    <button class="chip" data-k="cond">凝结<small>汽变成云</small></button>
+    <button class="chip" data-k="rain">降水<small>云变成雨</small></button>
+    <button class="chip" data-k="flow">汇流<small>雨回到湖</small></button>
+  </div>
+  <div id="explain">太阳、云、雨和小河，让水一直在转圈。试试拖动下面的<b>太阳时间</b>，或者拖动天上的<b>云朵</b>。</div>
+  <div id="controls">
+    <label for="time">太阳时间</label>
+    <input id="time" type="range" min="4" max="20" step="0.05" value="10.5" />
+    <span id="clock">10:30</span>
+    <button id="play" class="btn">▶ 播放</button>
+    <button id="reset" class="btn">重来</button>
+  </div>
+  <div id="note">真实的水蒸气是看不见的，这里画成白点方便观察。AI 辅助开发。</div>
+</div>
+
+<script type="module" src="./src/main.ts"></script>
+</body>
+</html>

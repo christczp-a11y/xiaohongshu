@@ -208,7 +208,9 @@ export function createScene(canvas: HTMLCanvasElement, s: Setup): SceneView {
     bumpScale: 0.4,
   });
   const brushed = T.brushed();
-  const anodised = new THREE.MeshStandardMaterial({ color: '#c8cdd2', metalness: 1, roughness: 1, roughnessMap: brushed });
+  // space-grey casing: a shade darker than the backdrop so the scale reads as
+  // a framed instrument on white
+  const anodised = new THREE.MeshStandardMaterial({ color: '#5b6066', metalness: 0.75, roughness: 1, roughnessMap: brushed });
   const solids: Record<Solid['id'], THREE.Material> = {
     // bead-blasted, the way school sample blocks usually are
     aluminium: new THREE.MeshStandardMaterial({
@@ -656,9 +658,19 @@ function studioEnvironment(): THREE.Scene {
   const env = new THREE.Scene();
   const room = new THREE.Mesh(
     new THREE.BoxGeometry(200, 120, 200),
-    new THREE.MeshBasicMaterial({ color: '#a9abae', side: THREE.BackSide }),
+    new THREE.MeshBasicMaterial({ color: '#8f9195', side: THREE.BackSide }),
   );
   env.add(room);
+  // negative fill: black flags beside the set put dark edges on glass and
+  // metal, the way product photographers keep white objects off a white sweep
+  const flag = (x: number, z: number) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(60, 110), new THREE.MeshBasicMaterial({ color: '#000000', side: THREE.DoubleSide }));
+    m.position.set(x, 10, z);
+    m.lookAt(0, 10, 0);
+    env.add(m);
+  };
+  flag(-96, 10);
+  flag(96, 30);
   const softbox = (w: number, h: number, pos: [number, number, number], power: number) => {
     const m = new THREE.Mesh(
       new THREE.PlaneGeometry(w, h),
@@ -754,7 +766,7 @@ function addDecal(
 // one multiplies a tint that grows toward grazing angles, one adds reflections.
 function glassMaterials() {
   const tint = new THREE.ShaderMaterial({
-    uniforms: { uTint: { value: new THREE.Color('#8e9897') } },
+    uniforms: { uTint: { value: new THREE.Color('#5f6867') } },
     vertexShader: /* glsl */ `
       varying vec3 vN;
       varying vec3 vV;
@@ -770,7 +782,7 @@ function glassMaterials() {
       varying vec3 vV;
       void main() {
         float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
-        f = pow(f, 2.2);
+        f = pow(f, 1.8);
         gl_FragColor = vec4(mix(vec3(0.985), uTint, f), 1.0);
       }`,
     transparent: true,

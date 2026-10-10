@@ -1,21 +1,21 @@
-"""Subset the title font to the characters this app uses.
+"""Subset the heavy sans to the characters this app uses.
 
-The title face is Smiley Sans (得意黑) by atelierAnchor, SIL OFL 1.1, from
-https://github.com/atelier-anchor/smiley-sans/releases. The OFL reserves the
-names "Smiley" and "得意黑" for the original, so the subset is renamed.
+Source: Noto Sans SC (Source Han Sans by Adobe and Google), SIL OFL 1.1, the
+"chinese-simplified" slices from @fontsource/noto-sans-sc@5.1.1, kept in
+minigame/fonts/. The OFL reserves the name "Source", so the subsets are renamed.
 
-usage: python3 scripts/subset-font.py path/to/SmileySans-Oblique.ttf
+usage: python3 scripts/subset-font.py
 """
 import pathlib
 import string
-import sys
 
 from fontTools import subset
 from fontTools.ttLib import TTFont
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-OUT = ROOT / 'src' / 'fonts' / 'lab-title.woff2'
-FAMILY = 'LabTitle'
+FONTS = ROOT.parents[2] / 'fonts'
+FAMILY = 'LabSans'
+WEIGHTS = {900: 'Heavy', 700: 'Bold'}
 
 
 def used_chars() -> str:
@@ -27,26 +27,32 @@ def used_chars() -> str:
     return ''.join(sorted(chars))
 
 
-def main(src: str) -> None:
+def build(weight: int, style: str) -> None:
+    out = ROOT / 'src' / 'fonts' / f'lab-sans-{weight}.woff2'
     opts = subset.Options()
     opts.flavor = 'woff2'
     opts.layout_features = ['*']
     opts.name_IDs = ['*']
-    font = TTFont(src)
+    font = TTFont(FONTS / f'noto-sans-sc-{weight}.woff2')
     sub = subset.Subsetter(opts)
     sub.populate(text=used_chars())
     sub.subset(font)
     for rec in font['name'].names:
-        if rec.nameID in (1, 4, 16):
+        if rec.nameID in (1, 16):
             rec.string = FAMILY
+        elif rec.nameID in (2, 17):
+            rec.string = style
+        elif rec.nameID == 4:
+            rec.string = f'{FAMILY} {style}'
         elif rec.nameID == 6:
-            rec.string = FAMILY + '-Regular'
+            rec.string = f'{FAMILY}-{style}'
         elif rec.nameID == 3:
-            rec.string = FAMILY + ';subset'
+            rec.string = f'{FAMILY}-{style};subset'
     font.flavor = 'woff2'
-    font.save(OUT)
-    print(f'{OUT.relative_to(ROOT)}: {OUT.stat().st_size} bytes')
+    font.save(out)
+    print(f'{out.relative_to(ROOT)}: {out.stat().st_size} bytes')
 
 
 if __name__ == '__main__':
-    main(sys.argv[1])
+    for w, s in WEIGHTS.items():
+        build(w, s)

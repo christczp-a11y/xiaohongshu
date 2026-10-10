@@ -602,21 +602,38 @@ function frame(now: number) {
   const a = view.anchors();
   const L = ctl.labels;
   placeTag(tags.G, a.G, 0, 1, L.G, arrowsOn);
-  placeTag(tags.Fb, a.Fb, -1, 0, L.Fb, arrowsOn);
+  const fb = placeTag(tags.Fb, a.Fb, -1, 0, L.Fb, arrowsOn);
   placeTag(tags.Ft, a.Ft, 1, 0, L.Ft, arrowsOn);
   placeTag(tags.N, a.N, 1, 0, L.N, arrowsOn);
-  placeTag(tags.cup, a.cup, -1, 0, L.cup, true);
+  // the liquid's name sits left of the cup like F浮; lift it clear when they meet
+  const cup = screen(a.cup);
+  const clash = arrowsOn && L.Fb && Math.abs(cup.x - fb.x) < 110 && Math.abs(cup.y - fb.y) < 30;
+  placeTag(tags.cup, a.cup, -1, 0, L.cup, true, clash ? fb.y - 30 - cup.y : 0);
   requestAnimationFrame(frame);
 }
 
 /** Pin a label next to an anchor; sx/sy pick the side (-1, 0, 1). */
-function placeTag(el: HTMLElement, p: THREE.Vector3, sx: number, sy: number, text: string | undefined, visible: boolean) {
+function screen(p: THREE.Vector3) {
   proj.copy(p).project(view.camera);
-  const x = (proj.x * 0.5 + 0.5) * canvas.clientWidth + sx * 8;
-  const y = (-proj.y * 0.5 + 0.5) * canvas.clientHeight + sy * 10;
+  return { x: (proj.x * 0.5 + 0.5) * canvas.clientWidth, y: (-proj.y * 0.5 + 0.5) * canvas.clientHeight };
+}
+
+function placeTag(
+  el: HTMLElement,
+  p: THREE.Vector3,
+  sx: number,
+  sy: number,
+  text: string | undefined,
+  visible: boolean,
+  dy = 0,
+) {
+  const s = screen(p);
+  const x = s.x + sx * 8;
+  const y = s.y + sy * 10 + dy;
   el.style.transform = `translate(${x}px, ${y}px) translate(${-50 + sx * 50}%, ${-50 + sy * 50}%)`;
   el.style.opacity = visible && text ? '1' : '0';
   if (text && el.textContent !== text) el.textContent = text;
+  return s;
 }
 
 requestAnimationFrame(frame);

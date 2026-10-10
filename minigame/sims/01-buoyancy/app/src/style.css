@@ -1,8 +1,8 @@
-@font-face {
-  font-family: 'LabTitle';
-  src: url('./fonts/lab-title.woff2') format('woff2');
-  font-display: block;
-}
+/* Noto Sans SC subsets, so the heavy poster type looks the same on every phone */
+@font-face { font-family: 'LabSans'; font-weight: 900; font-display: block;
+  src: url('./fonts/lab-sans-900.woff2') format('woff2'); }
+@font-face { font-family: 'LabSans'; font-weight: 700; font-display: block;
+  src: url('./fonts/lab-sans-700.woff2') format('woff2'); }
 
 /* Black and white with one accent (F浮). Keys are solid blocks standing on a
    darker edge and sink when pressed; type and layout follow Swiss posters:
@@ -19,7 +19,7 @@
   --sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC', 'Microsoft YaHei',
     sans-serif;
   --grot: 'Helvetica Neue', Helvetica, Arial, var(--sans);
-  --display: 'LabTitle', var(--sans);
+  --display: 'LabSans', var(--sans);
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   color-scheme: light;
@@ -49,21 +49,21 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; }
 .top > * { pointer-events: auto; }
 .brand { display: inline-flex; flex-direction: column; }
-.title { font-family: var(--display); font-weight: 400; font-size: 38px; line-height: 1; letter-spacing: 1px; }
-.kicker { display: flex; align-items: center; gap: 8px; margin-top: 7px; font-family: var(--grot); font-size: 10px;
-  font-weight: 700; letter-spacing: 2.5px; color: var(--ink); }
-.kicker i { flex: 1; height: 1.5px; background: var(--ink); }
-.round { width: 40px; height: 40px; border-radius: 13px; font-family: var(--display); font-size: 22px; }
+.kicker { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 5px; border-bottom: 2px solid var(--ink);
+  font-family: var(--grot); font-size: 10px; font-weight: 700; letter-spacing: 0.22em; color: var(--ink); }
+.title { margin-top: 6px; font-family: var(--display); font-weight: 900; font-size: 44px; line-height: 0.98;
+  letter-spacing: -0.01em; }
+.round { width: 40px; height: 40px; border-radius: 13px; font-family: var(--display); font-weight: 900; font-size: 20px; }
 
 /* --- mode tabs ----------------------------------------------------------------------------- */
-.tabs { position: absolute; top: calc(var(--safe-t) + 82px); left: 14px; right: 14px;
+.tabs { position: absolute; top: calc(var(--safe-t) + 92px); left: 14px; right: 14px;
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.tabs button { height: 42px; border-radius: 13px; font-family: var(--display); font-size: 17px; letter-spacing: 1px;
+.tabs button { height: 42px; border-radius: 13px; font-family: var(--display); font-weight: 700; font-size: 16px;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .tabs small { font-family: var(--grot); font-size: 10px; font-weight: 700; letter-spacing: 0.5px; opacity: 0.45; }
 
 /* --- the WebGL close-up is drawn under this frame -------------------------------------------- */
-.inset { position: absolute; right: 14px; top: calc(var(--safe-t) + 144px); width: 108px; height: 144px;
+.inset { position: absolute; right: 14px; top: calc(var(--safe-t) + 154px); width: 108px; height: 144px;
   border: 4px solid #fff; border-radius: 13px; pointer-events: none;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 5px 0 var(--key-edge), 0 16px 28px rgba(0, 0, 0, 0.12); }
 .inset figcaption { position: absolute; left: 50%; bottom: -15px; transform: translateX(-50%); white-space: nowrap;
@@ -101,7 +101,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .panel[hidden] { display: none; }
 .guide { display: flex; align-items: center; gap: 10px; padding: 0 2px; min-height: 26px; font-size: 14.5px; font-weight: 700; }
 .step { flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
-  background: var(--ink); color: #fff; font-family: var(--display); font-size: 17px; font-weight: 400; font-style: normal;
+  background: var(--ink); color: #fff; font-family: var(--display); font-size: 15px; font-weight: 900; font-style: normal;
   box-shadow: 0 2px 0 #000; }
 .step.dotted { width: 10px; height: 10px; border-radius: 2px; margin: 0 8px; box-shadow: none; }
 
@@ -110,7 +110,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .picks:has(.wide) { grid-template-columns: 4fr 3fr; }
 .pick .lbl { display: block; margin: 0 0 5px 1px; font-size: 11px; font-weight: 700; color: var(--ink-3); letter-spacing: 1px; }
 .seg { display: flex; gap: 5px; }
-.seg button { flex: 1; min-width: 0; height: 30px; border-radius: 9px; font-family: var(--display); font-size: 15px;
+.seg button { flex: 1; min-width: 0; height: 30px; border-radius: 9px; font-family: var(--display); font-weight: 700; font-size: 14px;
   white-space: nowrap; --depth: 3px; }
 
 .meters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; }
@@ -136,7 +136,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .eq.ok .sign { box-shadow: none; }
 
 .actions { display: grid; grid-template-columns: 1fr 2.1fr; gap: 10px; margin-top: 12px; }
-.btn { height: 46px; border-radius: 14px; font-family: var(--display); font-size: 18px; letter-spacing: 1px; --depth: 5px; }
+.btn { height: 46px; border-radius: 14px; font-family: var(--display); font-weight: 700; font-size: 16px; --depth: 5px; }
 .btn:not(.primary):not(:disabled) { background: var(--well); --edge: var(--key-edge); --rim: transparent; }
 
 .chart { margin-top: 12px; border-radius: 12px; background: var(--well); box-shadow: inset 0 -3px 0 var(--well-edge);
@@ -149,7 +149,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 dialog { margin: auto; max-width: 340px; border: 0; border-radius: 22px; padding: 20px; color: var(--ink); background: #fff;
   box-shadow: 0 6px 0 var(--well-edge), 0 30px 60px rgba(0, 0, 0, 0.25); font-size: 14px; line-height: 1.6; }
 dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
-dialog h3 { font-family: var(--display); font-weight: 400; font-size: 24px; margin-bottom: 8px; }
+dialog h3 { font-family: var(--display); font-weight: 900; font-size: 22px; margin-bottom: 8px; }
 dialog p + p { margin-top: 4px; }
 dialog ul { padding-left: 18px; margin: 10px 0; color: var(--ink-2); font-size: 13px; }
 dialog .small { font-size: 12px; color: var(--ink-3); }

@@ -1,8 +1,8 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>浮力实验室</title>
 <link rel="stylesheet" href="./src/style.css" />
 </head>
@@ -79,7 +79,7 @@
       <!-- 浮还是沉 -->
       <div class="panel" data-for="float" hidden>
         <div class="guide"><i class="step dotted"></i><span id="floatText">猜一猜：松手后它会浮起来，还是沉下去？</span></div>
-        <div class="picks">
+        <div class="picks lead">
           <div class="pick wide"><span class="lbl">物块</span><div class="seg sm" id="floatSolid"></div></div>
           <div class="pick"><span class="lbl">液体</span><div class="seg sm" id="floatLiquid"></div></div>
         </div>
@@ -98,8 +98,9 @@
     </div>
   </section>
 
-  <dialog id="about">
-    <h3>关于浮力实验室</h3>
+  <div class="sheet" id="about" hidden>
+   <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+    <h3 id="aboutTitle">关于浮力实验室</h3>
     <p><b>称一称</b>：弹簧测力计吊着铝块，慢慢放进装满水的溢水杯，溢出的水流进小烧杯，和浮力比一比。</p>
     <p><b>变一变</b>：换液体、换物块，看浮力跟什么有关、跟什么无关。</p>
     <p><b>浮还是沉</b>：松手，看物块最后漂浮还是沉底。</p>
@@ -109,9 +110,29 @@
       <li>数字保留两位小数；浮力由「物重 − 示数」算出。</li>
     </ul>
     <p class="small">AI 辅助开发。知识点按初中物理「浮力」整理，未使用教材文字和插图。字体为 Noto Sans SC 的子集（SIL OFL 1.1）。</p>
-    <form method="dialog"><button class="btn key primary">知道了</button></form>
-  </dialog>
+    <div class="sheet-actions"><button class="btn key primary" id="aboutClose">知道了</button></div>
+   </div>
+  </div>
 </main>
+
+<!-- shown when this device cannot draw the 3D scene, struggles with it, or loses the GPU -->
+<div id="fallback" hidden>
+  <div class="inner">
+    <div class="brand">
+      <div class="kicker"><span>BUOYANCY LAB</span><span>01</span></div>
+      <h1 class="title">浮力实验室</h1>
+    </div>
+    <img src="./fallback.webp" alt="溢水杯、弹簧测力计和铝块的实验台" />
+    <p id="fallbackMsg"></p>
+    <button class="btn key primary" id="fallbackReload" hidden>重新打开</button>
+    <ol>
+      <li><b>1</b><span><strong>称一称</strong>：物体挂在测力计下，放进水里示数会变小，少掉的就是浮力：F浮 = G − F拉。</span></li>
+      <li><b>2</b><span><strong>阿基米德原理</strong>：浸在液体里的物体受到的浮力，等于它排开的液体受到的重力：F浮 = G排。</span></li>
+      <li><b>3</b><span><strong>跟什么有关</strong>：浮力跟液体密度、排开液体的体积有关；完全浸没以后，再往深处放，浮力不变。</span></li>
+      <li><b>4</b><span><strong>浮还是沉</strong>：实心物体 ρ物 &lt; ρ液 最后漂浮，ρ物 &gt; ρ液 沉底，ρ物 = ρ液 悬浮。</span></li>
+    </ol>
+  </div>
+</div>
 <script type="module" src="./src/main.ts"></script>
 </body>
 </html>

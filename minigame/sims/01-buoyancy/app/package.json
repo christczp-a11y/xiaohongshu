@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "minitool": "tsc --noEmit && node scripts/build-minitool.mjs"
   },
   "dependencies": {
     "three": "0.186.1"

@@ -1,3 +1,9 @@
+/* Noto Sans SC subsets (minigame/fonts, SIL OFL 1.1), so the heavy poster type looks the same on every phone */
+@font-face { font-family: 'LabSans'; font-weight: 900; font-display: block;
+  src: url('./fonts/lab-sans-900.woff2') format('woff2'); }
+@font-face { font-family: 'LabSans'; font-weight: 700; font-display: block;
+  src: url('./fonts/lab-sans-700.woff2') format('woff2'); }
+
 /* Swiss-poster layout, black-and-white palette, chunky press-down blocks, solid white cards.
    Colour lives only in the 3D scene. */
 :root {
@@ -12,7 +18,7 @@
   --head: #2b2c30;        /* title colour; turns white at night */
   --head-2: #6e6e73;
   --bar: rgba(43, 44, 48, .1);
-  --display: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', sans-serif;
+  --display: 'LabSans', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', sans-serif;
   --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   --safe-t: 0px;
   --safe-b: 0px;
@@ -96,7 +102,7 @@ canvas { display: block; touch-action: none; }
   max-width: 560px; margin: 0 auto; padding: 14px 14px 12px;
 }
 #chips { display: grid; grid-template-columns: repeat(4, 1fr); grid-gap: 8px; }
-.chip { height: 44px; font-family: var(--display); font-weight: 800; font-size: 17px; display: flex; align-items: center; justify-content: center; }
+.chip { height: 44px; font-family: var(--display); font-weight: 700; font-size: 17px; display: flex; align-items: center; justify-content: center; }
 .chip em { margin-right: 6px; font-family: var(--sans); font-style: normal; font-size: 11px; font-weight: 800; opacity: .45; }
 .chip.on em { opacity: .7; }
 

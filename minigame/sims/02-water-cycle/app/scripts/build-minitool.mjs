@@ -18,7 +18,7 @@ await build({
 });
 await build({
   entryPoints: ['src/style.css'], bundle: true, minify: true, target: ['chrome61'],
-  outfile: `${OUT}/style.css`, logLevel: 'warning',
+  loader: { '.woff2': 'file' }, assetNames: '[name]', outfile: `${OUT}/style.css`, logLevel: 'warning',
 });
 
 let html = readFileSync('index.html', 'utf8');

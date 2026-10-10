@@ -1,175 +1,621 @@
 import * as THREE from 'three';
-import { DEFAULT_SETUP, display, initialState, readings, settle, step, type State } from './physics';
-import { createScene, type FreeArea } from './scene';
-import { TITLE_FONT } from './textures';
+import { LIQUIDS, densityLabel, liquid, solid, type Liquid } from './data';
+import { floatReadings, floatStart, floatStep, outcome, type FloatState } from './float';
+import {
+  DEFAULT_SETUP,
+  capacityAtSpout,
+  display,
+  initialState,
+  readings,
+  round2,
+  settle,
+  step,
+  type Setup,
+  type State,
+} from './physics';
+import { createScene, type FreeArea, type Mode, type SceneFrame } from './scene';
 
-const S = DEFAULT_SETUP;
 const START_BOTTOM = 13; // cube bottom above the cup floor, just clear of the water
-const MIN_BOTTOM = 1; // never let it rest on the floor (the scale would read wrong)
+const MIN_BOTTOM = 1; // never let a hung cube rest on the floor (the scale would read wrong)
 const MAX_BOTTOM = 13;
+const HOLD_Y = 13; // where a cube is held before it is let go in 浮还是沉
+const H_MAX = DEFAULT_SETUP.spoutHeight - MIN_BOTTOM; // deepest the cube can go, for the chart
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+const params = new URLSearchParams(location.search);
+const pose = params.get('pose');
 
-async function main() {
-  // the canvas textures (nameplate) draw with the title font, so load it first
-  try {
-    await document.fonts.load(`32px ${TITLE_FONT}`, '浮力');
-  } catch {
-    // fall back to the system font
-  }
+const canvas = $<HTMLCanvasElement>('c');
+const view = createScene(canvas, DEFAULT_SETUP);
+const landscape = window.matchMedia('(min-aspect-ratio: 1/1)');
 
-  const canvas = $<HTMLCanvasElement>('c');
-  const view = createScene(canvas, S);
-  const landscape = window.matchMedia('(min-aspect-ratio: 1/1)');
+type Labels = { G?: string; Fb?: string; Ft?: string; N?: string; cup: string };
 
-  // ?pose=air|half|full holds the rig in a fixed state (for screenshots and checks)
-  const pose = new URLSearchParams(location.search).get('pose');
-  const posed = (bottom: number): State => settle(initialState(S, bottom), S);
-  let target = pose === 'full' ? 3.5 : pose === 'half' ? S.spoutHeight - S.cubeSide / 2 : START_BOTTOM;
-  let state = pose ? posed(target) : initialState(S, START_BOTTOM);
-  let overflowing = false;
-  if (pose) $('hint').classList.add('gone');
+interface Controller {
+  hint: string;
+  enter(): void;
+  grab(): void;
+  drag(dy: number): void; // cm, up is positive
+  release(): void;
+  frame(dt: number, time: number): SceneFrame;
+  labels: Labels;
+}
 
-  // --- drag to raise / lower -------------------------------------------------------
-  let dragY: number | null = null;
-  canvas.addEventListener('pointerdown', (e) => {
-    dragY = e.clientY;
-    canvas.setPointerCapture(e.pointerId);
-    canvas.classList.add('dragging');
-    $('hint').classList.add('gone');
-  });
-  canvas.addEventListener('pointermove', (e) => {
-    if (dragY === null) return;
-    target -= (e.clientY - dragY) * view.cmPerPixel();
-    target = THREE.MathUtils.clamp(target, MIN_BOTTOM, MAX_BOTTOM);
-    dragY = e.clientY;
-  });
-  const endDrag = () => {
-    dragY = null;
-    canvas.classList.remove('dragging');
-  };
-  canvas.addEventListener('pointerup', endDrag);
-  canvas.addEventListener('pointercancel', endDrag);
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown') target = Math.max(MIN_BOTTOM, target - 0.5);
-    if (e.key === 'ArrowUp') target = Math.min(MAX_BOTTOM, target + 0.5);
-  });
+const ease = (from: number, to: number, dt: number) => from + (to - from) * Math.min(1, dt * 14);
+const clamp = THREE.MathUtils.clamp;
 
-  // --- controls -------------------------------------------------------------------------
-  const arrowBtn = $('arrowToggle');
-  let arrowsOn = true;
-  arrowBtn.addEventListener('click', () => {
-    arrowsOn = !arrowsOn;
-    arrowBtn.setAttribute('aria-pressed', String(arrowsOn));
-    view.setArrows(arrowsOn);
-  });
-  $('reset').addEventListener('click', () => {
-    state = initialState(S, START_BOTTOM);
-    target = START_BOTTOM;
-  });
-  $('aboutBtn').addEventListener('click', () => $<HTMLDialogElement>('about').showModal());
+/** Fill a segmented control with buttons and keep one selected. */
+function segmented<T extends string>(el: HTMLElement, items: { id: T; label: string }[], value: T, pick: (id: T) => void) {
+  el.replaceChildren(
+    ...items.map((it) => {
+      const b = document.createElement('button');
+      b.textContent = it.label;
+      b.dataset.id = it.id;
+      b.addEventListener('click', () => {
+        if (b.classList.contains('on')) return;
+        set(it.id);
+        pick(it.id);
+      });
+      return b;
+    }),
+  );
+  const set = (id: T) => el.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.id === id));
+  set(value);
+  return set;
+}
+
+// --- 称一称: aluminium in water, overflow into the beaker ---------------------------------------
+function weighMode(): Controller {
+  const s = DEFAULT_SETUP;
+  let target = pose === 'full' ? 3.5 : pose === 'half' ? s.spoutHeight - s.cubeSide / 2 : START_BOTTOM;
+  let state: State = pose ? settle(initialState(s, target), s) : initialState(s, START_BOTTOM);
+  const out = { G: $('vG'), F: $('vF'), B: $('vB'), P: $('vP') };
+  const eqrow = $('eqrow');
+  const eqSign = $('eqSign');
+  const eqNote = $('eqNote');
   const stepNo = $('stepNo');
   const stepText = $('stepText');
   let noteUntil = 0;
+
+  $('reset').addEventListener('click', () => {
+    state = initialState(s, START_BOTTOM);
+    target = START_BOTTOM;
+  });
   $('record').addEventListener('click', () => {
     // the data table is not built yet; say so instead of pretending
     noteUntil = performance.now() + 2500;
     stepText.textContent = '记录表还在做，先把这组数字记在本子上吧';
   });
 
-  // --- layout -----------------------------------------------------------------------------
-  const dock = $('dock');
-  const tabs = $('tabs');
-  const insetEl = $('inset');
-  const hint = $('hint');
-  const chip = $('arrowToggle');
-  function layout() {
-    const W = canvas.clientWidth;
-    const H = canvas.clientHeight;
-    const t = tabs.getBoundingClientRect();
-    const d = dock.getBoundingClientRect();
-    const free: FreeArea = landscape.matches
-      ? { top: t.bottom + 8, bottom: 8, left: 8, right: W - d.left + 12 }
-      : { top: t.bottom + 10, bottom: H - d.top + 4, left: 0, right: 0 };
-    view.resize(W, H, free);
+  const c: Controller = {
+    hint: '上下拖动，把铝块放进水里',
+    labels: { cup: '水' },
+    enter() {
+      view.setSolid('aluminium');
+      view.setLiquid('water');
+    },
+    grab() {},
+    drag(dy) {
+      target = clamp(target + dy, MIN_BOTTOM, MAX_BOTTOM);
+    },
+    release() {},
+    frame(dt, time) {
+      const before = state.beakerWater;
+      state = step(state, ease(state.cubeBottom, target, dt), dt, s);
+      const overflowing = state.beakerWater - before > 1e-4;
+      const r = readings(state, s);
+      const d = display(r);
+      out.G.textContent = d.weight;
+      out.F.textContent = d.scaleReading;
+      out.B.textContent = d.buoyancy;
+      out.P.textContent = d.beakerWeight;
+      const inWater = r.buoyancy > 0.01;
+      const full = r.submerged >= s.cubeSide - 1e-3;
+      const match = d.buoyancy === d.beakerWeight && inWater && !overflowing;
+      eqrow.classList.toggle('ok', match);
+      eqSign.textContent = match ? '=' : inWater ? '…' : '?';
+      eqNote.textContent = match
+        ? '阿基米德原理'
+        : inWater
+          ? overflowing
+            ? '水正在流进小烧杯'
+            : '烧杯里有之前溢出的水，点「重做」再来'
+          : '把铝块放进水里看看';
+      if (performance.now() > noteUntil) {
+        const [n, text] = !inWater
+          ? ['1', '先读测力计：铝块在空气中有多重？']
+          : !full
+            ? ['2', '慢慢往下放，盯着测力计的指针']
+            : overflowing
+              ? ['3', '全部浸没了，等溢出的水流完']
+              : ['4', '比一比：浮力和溢出的水重'];
+        stepNo.textContent = n;
+        stepText.textContent = text;
+      }
+      c.labels = {
+        G: `G ${d.weight}N`,
+        Fb: inWater ? `F浮 ${d.buoyancy}N` : undefined,
+        Ft: `F拉 ${d.scaleReading}N`,
+        cup: '水',
+      };
+      return {
+        cubeBottom: state.cubeBottom,
+        level: r.level,
+        beakerWater: state.beakerWater,
+        overflowing,
+        scaleReading: r.scaleReading,
+        forces: { G: r.weight, Fb: r.buoyancy, Ft: r.scaleReading, N: 0 },
+        time,
+      };
+    },
+  };
+  return c;
+}
+
+// --- 变一变: change the liquid and the block, plot F浮 against depth ---------------------------
+function varyMode(): Controller {
+  type L = Liquid['id'];
+  type M = 'aluminium' | 'iron' | 'copper';
+  let liq: L = 'water';
+  let mat: M = 'aluminium';
+  const setup = (): Setup => ({ ...DEFAULT_SETUP, cubeDensity: solid(mat).density, liquidDensity: liquid(liq).density });
+  let s = setup();
+  let target = pose === 'full' ? 3.5 : pose === 'half' ? s.spoutHeight - s.cubeSide / 2 : START_BOTTOM;
+  let state: State = pose ? settle(initialState(s, target), s) : initialState(s, START_BOTTOM);
+  // explored F浮 per liquid, binned every 0.1 cm of depth
+  const curves = new Map<L, Map<number, number>>();
+  let noteUntil = 0;
+  let note = '';
+  const out = { G: $('yG'), F: $('yF'), B: $('yB'), H: $('yH') };
+  const text = $('varyText');
+  const chart = $<HTMLCanvasElement>('chart');
+  let chartKey = '';
+
+  const say = (t: string) => {
+    note = t;
+    noteUntil = performance.now() + 4000;
+  };
+  segmented(
+    $('varyLiquid'),
+    LIQUIDS.map((l) => ({ id: l.id, label: l.name })),
+    liq,
+    (id) => {
+      liq = id;
+      s = setup();
+      // swap the liquid with the block where it is: the cup is refilled to the
+      // spout and the beaker starts empty
+      state = { cupWater: capacityAtSpout(state.cubeBottom, s), beakerWater: 0, cubeBottom: state.cubeBottom };
+      view.setLiquid(id);
+      if (readings(state, s).submerged > 0) say(`同样的深度，换成${liquid(id).name}，F浮 变了`);
+    },
+  );
+  segmented(
+    $('varySolid'),
+    (['aluminium', 'iron', 'copper'] as M[]).map((id) => ({ id, label: solid(id).name.slice(0, 1) })),
+    mat,
+    (id) => {
+      mat = id;
+      s = setup();
+      view.setSolid(id);
+      if (readings(state, s).submerged > 0) say('换了物块，G 变了，F浮 没变');
+    },
+  );
+  $('clearChart').addEventListener('click', () => {
+    curves.clear();
+    chartKey = '';
+  });
+
+  if (pose) {
+    // screenshots: show what a pass through water and alcohol would have drawn
+    for (const id of ['alcohol', 'water'] as L[]) {
+      const m = new Map<number, number>();
+      for (let i = 0; i <= Math.round((s.spoutHeight - target) * 10); i++) m.set(i, buoyancyAt(i / 10, liquid(id).density));
+      curves.set(id, m);
+    }
+  }
+
+  function buoyancyAt(h: number, density: number) {
+    const a = DEFAULT_SETUP.cubeSide;
+    return density * a * a * Math.min(h, a) * 1e-6 * DEFAULT_SETUP.g;
+  }
+
+  function drawChart(h: number, fb: number) {
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    const w = Math.round(chart.clientWidth * dpr);
+    const ht = Math.round(chart.clientHeight * dpr);
+    if (!w || !ht) return;
+    if (chart.width !== w || chart.height !== ht) {
+      chart.width = w;
+      chart.height = ht;
+    }
+    const g = chart.getContext('2d')!;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const W = chart.clientWidth;
+    const H = chart.clientHeight;
+    const L = 30;
+    const R = 10;
+    const T = 8;
+    const B = 18;
+    const FMAX = 1.0;
+    const x = (v: number) => L + (v / H_MAX) * (W - L - R);
+    const y = (f: number) => T + (1 - f / FMAX) * (H - T - B);
+    g.clearRect(0, 0, W, H);
+    g.font = `500 10px ${getComputedStyle(document.body).fontFamily}`;
+    g.lineWidth = 1;
+    // grid and axes
+    g.fillStyle = '#8e8e93';
+    g.textAlign = 'right';
+    g.textBaseline = 'middle';
+    for (const f of [0, 0.5, 1]) {
+      g.strokeStyle = f === 0 ? '#c7c7cc' : '#ececf0';
+      g.beginPath();
+      g.moveTo(L, y(f) + 0.5);
+      g.lineTo(W - R, y(f) + 0.5);
+      g.stroke();
+      g.fillText(f === 0 ? '0' : `${f}N`, L - 5, y(f));
+    }
+    g.textAlign = 'center';
+    g.textBaseline = 'top';
+    for (let v = 0; v <= H_MAX; v += 2) g.fillText(v === 0 ? 'h=0' : `${v}`, x(v), H - B + 5);
+    g.fillText('cm', W - R, H - B + 5);
+    // where the block is just fully under
+    const a = DEFAULT_SETUP.cubeSide;
+    g.strokeStyle = '#c7c7cc';
+    g.setLineDash([3, 3]);
+    g.beginPath();
+    g.moveTo(Math.round(x(a)) + 0.5, T);
+    g.lineTo(Math.round(x(a)) + 0.5, H - B);
+    g.stroke();
+    g.setLineDash([]);
+    g.textAlign = 'left';
+    g.textBaseline = 'bottom';
+    g.fillText('刚好浸没', x(a) + 4, H - B - 2);
+    // explored curves, older liquids in grey
+    const order = [...curves.keys()].sort((p) => (p === liq ? 1 : -1));
+    for (const id of order) {
+      const bins = [...curves.get(id)!.entries()].sort((p, q) => p[0] - q[0]);
+      if (bins.length < 2) continue;
+      const on = id === liq;
+      g.strokeStyle = on ? '#0071e3' : '#b8b8bd';
+      g.lineWidth = on ? 2 : 1.5;
+      g.beginPath();
+      let prev = -9;
+      for (const [b, f] of bins) {
+        if (b - prev > 3) g.moveTo(x(b / 10), y(f));
+        else g.lineTo(x(b / 10), y(f));
+        prev = b;
+      }
+      g.stroke();
+      const [lb, lf] = bins[bins.length - 1];
+      if (lb / 10 > a + 1) {
+        // the current liquid is named above its line, older ones below theirs
+        g.fillStyle = on ? '#0071e3' : '#8e8e93';
+        g.textAlign = 'right';
+        g.textBaseline = on ? 'bottom' : 'top';
+        g.fillText(liquid(id).name, x(lb / 10) - 8, on ? y(lf) - 3 : y(lf) + 3);
+      }
+    }
+    // the block right now
+    g.fillStyle = '#ffffff';
+    g.beginPath();
+    g.arc(x(h), y(fb), 5, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#0071e3';
+    g.beginPath();
+    g.arc(x(h), y(fb), 3.5, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  const c: Controller = {
+    hint: '上下拖动，换液体、换物块比一比',
+    labels: { cup: '水' },
+    enter() {
+      view.setSolid(mat);
+      view.setLiquid(liq);
+      chartKey = '';
+    },
+    grab() {},
+    drag(dy) {
+      target = clamp(target + dy, MIN_BOTTOM, MAX_BOTTOM);
+    },
+    release() {},
+    frame(dt, time) {
+      const before = state.beakerWater;
+      state = step(state, ease(state.cubeBottom, target, dt), dt, s);
+      const overflowing = state.beakerWater - before > 1e-4;
+      const r = readings(state, s);
+      const d = display(r);
+      const h = clamp(r.level - state.cubeBottom, 0, H_MAX);
+      out.G.textContent = d.weight;
+      out.F.textContent = d.scaleReading;
+      out.B.textContent = d.buoyancy;
+      out.H.textContent = h.toFixed(1);
+
+      let m = curves.get(liq);
+      if (!m) curves.set(liq, (m = new Map()));
+      const bin = Math.round(h * 10);
+      if (!m.has(bin)) {
+        m.set(bin, r.buoyancy);
+        chartKey = '';
+      }
+      const key = `${liq}|${bin}|${round2(r.buoyancy)}|${chart.clientWidth}`;
+      if (key !== chartKey) {
+        chartKey = key;
+        drawChart(h, r.buoyancy);
+      }
+
+      const full = r.submerged >= s.cubeSide - 1e-3;
+      const tried = [...curves.values()].filter((v) => v.size > 20).length;
+      text.textContent =
+        performance.now() < noteUntil
+          ? note
+          : r.submerged <= 0
+            ? `往下拖，把${solid(mat).name}放进${liquid(liq).name}里`
+            : !full
+              ? '浸入越深，排开的液体越多，F浮 越大'
+              : tried >= 2
+                ? '都浸没时：液体密度越大，F浮 越大'
+                : '浸没以后再往下，F浮 不变了';
+      const inLiquid = r.buoyancy > 0.005;
+      c.labels = {
+        G: `G ${d.weight}N`,
+        Fb: inLiquid ? `F浮 ${d.buoyancy}N` : undefined,
+        Ft: `F拉 ${d.scaleReading}N`,
+        cup: liquid(liq).name,
+      };
+      return {
+        cubeBottom: state.cubeBottom,
+        level: r.level,
+        beakerWater: state.beakerWater,
+        overflowing,
+        scaleReading: r.scaleReading,
+        forces: { G: r.weight, Fb: r.buoyancy, Ft: r.scaleReading, N: 0 },
+        time,
+      };
+    },
+  };
+  return c;
+}
+
+// --- 浮还是沉: let go and see where the block ends up -------------------------------------------
+function floatMode(): Controller {
+  type L = Liquid['id'];
+  type M = 'wood' | 'wax' | 'aluminium' | 'iron';
+  let liq: L = 'water';
+  let mat: M = 'wood';
+  const setup = (): Setup => ({ ...DEFAULT_SETUP, cubeDensity: solid(mat).density, liquidDensity: liquid(liq).density });
+  let s = setup();
+  let st: FloatState = floatStart(s, HOLD_Y);
+  let target = HOLD_Y;
+  const out = { Rs: $('zRs'), Rl: $('zRl'), G: $('zG'), B: $('zB') };
+  const text = $('floatText');
+  const dropBtn = $<HTMLButtonElement>('drop');
+
+  function restart() {
+    s = setup();
+    st = floatStart(s, HOLD_Y);
+    target = HOLD_Y;
+    out.Rs.textContent = densityLabel(s.cubeDensity);
+    out.Rl.textContent = densityLabel(s.liquidDensity);
+  }
+  function letGo() {
+    if (!st.held) return;
+    st = { ...st, held: false, v: 0 };
+  }
+  segmented(
+    $('floatSolid'),
+    (['wood', 'wax', 'aluminium', 'iron'] as M[]).map((id) => ({ id, label: solid(id).name.slice(0, 1) })),
+    mat,
+    (id) => {
+      mat = id;
+      view.setSolid(id);
+      restart();
+    },
+  );
+  segmented(
+    $('floatLiquid'),
+    LIQUIDS.map((l) => ({ id: l.id, label: l.name })),
+    liq,
+    (id) => {
+      liq = id;
+      view.setLiquid(id);
+      restart();
+    },
+  );
+  $('floatReset').addEventListener('click', restart);
+  dropBtn.addEventListener('click', letGo);
+
+  restart();
+  if (pose) {
+    // screenshots: let it settle first
+    letGo();
+    for (let i = 0; i < 600; i++) st = floatStep(st, 1 / 30, s);
+  }
+
+  const c: Controller = {
+    hint: '拖动物块，松手看它浮还是沉',
+    labels: { cup: '水' },
+    enter() {
+      view.setSolid(mat);
+      view.setLiquid(liq);
+    },
+    grab() {
+      st = { ...st, held: true, v: 0 };
+      target = st.y;
+    },
+    drag(dy) {
+      target = clamp(target + dy, 0, HOLD_Y);
+    },
+    release() {
+      letGo();
+    },
+    frame(dt, time) {
+      if (st.held) st = { ...st, y: ease(st.y, target, dt) };
+      st = floatStep(st, dt, s);
+      const r = floatReadings(st, s);
+      const G = round2(r.weight);
+      const Fb = round2(r.buoyancy);
+      out.G.textContent = G.toFixed(2);
+      out.B.textContent = Fb.toFixed(2);
+      dropBtn.disabled = !st.held;
+
+      const rs = densityLabel(s.cubeDensity);
+      const rl = densityLabel(s.liquidDensity);
+      const end = outcome(s);
+      text.textContent = st.held
+        ? '猜一猜：松手后它会浮起来，还是沉下去？'
+        : !r.resting
+          ? '看它往哪儿走……'
+          : end === 'float'
+            ? `漂浮：ρ物 ${rs} < ρ液 ${rl}，F浮 = G`
+            : end === 'sink'
+              ? `沉底：ρ物 ${rs} > ρ液 ${rl}，F浮 < G，杯底托着它`
+              : `悬浮：ρ物 = ρ液，F浮 = G`;
+      // the support only appears once the block is resting on the floor
+      const N = round2(r.support);
+      c.labels = {
+        G: `G ${G.toFixed(2)}N`,
+        Fb: r.buoyancy > 0.005 ? `F浮 ${Fb.toFixed(2)}N` : undefined,
+        N: N > 0 ? `F支 ${(G - Fb).toFixed(2)}N` : undefined,
+        cup: liquid(liq).name,
+      };
+      return {
+        cubeBottom: st.y,
+        level: r.level,
+        beakerWater: 0,
+        overflowing: false,
+        scaleReading: 0,
+        forces: { G: r.weight, Fb: r.buoyancy, Ft: 0, N: r.support },
+        time,
+      };
+    },
+  };
+  return c;
+}
+
+// --- wiring ---------------------------------------------------------------------------------------
+const controllers: Record<Mode, Controller> = { weigh: weighMode(), vary: varyMode(), float: floatMode() };
+const initial = params.get('mode');
+let mode: Mode = initial === 'vary' || initial === 'float' ? initial : 'weigh';
+let ctl = controllers[mode];
+const app = $('app');
+const hint = $('hint');
+const hintText = $('hintText');
+const seen = new Set<Mode>();
+
+function setMode(m: Mode) {
+  mode = m;
+  ctl = controllers[m];
+  app.dataset.mode = m;
+  document.querySelectorAll<HTMLButtonElement>('#tabs button').forEach((b) => {
+    const on = b.dataset.mode === m;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', String(on));
+  });
+  document.querySelectorAll<HTMLElement>('.panel').forEach((p) => (p.hidden = p.dataset.for !== m));
+  view.setMode(m);
+  ctl.enter();
+  hintText.textContent = ctl.hint;
+  hint.classList.toggle('gone', seen.has(m) || !!pose);
+  hint.querySelector('.hand')!.textContent = m === 'float' ? '☝' : '↕';
+  layout();
+}
+document.querySelectorAll<HTMLButtonElement>('#tabs button').forEach((b) =>
+  b.addEventListener('click', () => b.dataset.mode !== mode && setMode(b.dataset.mode as Mode)),
+);
+
+// drag to raise / lower
+let dragY: number | null = null;
+canvas.addEventListener('pointerdown', (e) => {
+  dragY = e.clientY;
+  canvas.setPointerCapture(e.pointerId);
+  canvas.classList.add('dragging');
+  seen.add(mode);
+  hint.classList.add('gone');
+  ctl.grab();
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (dragY === null) return;
+  ctl.drag(-(e.clientY - dragY) * view.cmPerPixel());
+  dragY = e.clientY;
+});
+const endDrag = () => {
+  if (dragY === null) return;
+  dragY = null;
+  canvas.classList.remove('dragging');
+  ctl.release();
+};
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') ctl.drag(-0.5);
+  if (e.key === 'ArrowUp') ctl.drag(0.5);
+});
+
+const arrowBtn = $('arrowToggle');
+let arrowsOn = true;
+arrowBtn.addEventListener('click', () => {
+  arrowsOn = !arrowsOn;
+  arrowBtn.setAttribute('aria-pressed', String(arrowsOn));
+  view.setArrows(arrowsOn);
+});
+$('aboutBtn').addEventListener('click', () => $<HTMLDialogElement>('about').showModal());
+
+// layout
+const dock = $('dock');
+const tabs = $('tabs');
+const insetEl = $('inset');
+const chip = $('arrowToggle');
+function layout() {
+  const W = canvas.clientWidth;
+  const H = canvas.clientHeight;
+  const t = tabs.getBoundingClientRect();
+  const d = dock.getBoundingClientRect();
+  const free: FreeArea = landscape.matches
+    ? { top: t.bottom + 8, bottom: 8, left: 8, right: W - d.left + 12 }
+    : { top: t.bottom + 10, bottom: H - d.top + 4, left: 0, right: 0 };
+  view.resize(W, H, free);
+  if (mode === 'float') view.setInset(null);
+  else {
     const r = insetEl.getBoundingClientRect();
     const b = insetEl.clientLeft;
     view.setInset({ x: r.left + b, y: r.top + b, w: r.width - 2 * b, h: r.height - 2 * b });
-    hint.style.bottom = landscape.matches ? '24px' : `${H - d.top + 18}px`;
-    chip.style.top = landscape.matches ? '' : `${d.top - chip.offsetHeight - 14}px`;
   }
-  window.addEventListener('resize', layout);
-  layout();
+  // portrait: one row above the 受力分析 chip so the two never overlap
+  hint.style.bottom = landscape.matches ? '24px' : `${H - d.top + 14 + chip.offsetHeight + 12}px`;
+  chip.style.top = landscape.matches ? '' : `${d.top - chip.offsetHeight - 14}px`;
+}
+window.addEventListener('resize', layout);
+setMode(mode);
 
-  // --- loop ---------------------------------------------------------------------------------
-  const tags = { G: $('lblG'), Fb: $('lblB'), Ft: $('lblT') };
-  const out = { G: $('vG'), F: $('vF'), B: $('vB'), P: $('vP') };
-  const eqrow = $('eqrow');
-  const eqSign = $('eqSign');
-  const eqNote = $('eqNote');
-  const proj = new THREE.Vector3();
-
-  let last = performance.now();
-  function frame(now: number) {
-    const dt = Math.min((now - last) / 1000, 1 / 20);
-    last = now;
-    // ease toward the finger so motion feels weighty, not twitchy
-    const cubeBottom = state.cubeBottom + (target - state.cubeBottom) * Math.min(1, dt * 14);
-    const before = state.beakerWater;
-    state = step(state, cubeBottom, dt, S);
-    overflowing = state.beakerWater - before > 1e-4;
-
-    const r = readings(state, S);
-    view.update(r, state.cubeBottom, state.beakerWater, overflowing, now / 1000);
-    view.render(now / 1000);
-
-    const d = display(r);
-    out.G.textContent = d.weight;
-    out.F.textContent = d.scaleReading;
-    out.B.textContent = d.buoyancy;
-    out.P.textContent = d.beakerWeight;
-    const inWater = r.buoyancy > 0.01;
-    const full = r.submerged >= S.cubeSide - 1e-3;
-    const match = d.buoyancy === d.beakerWeight && inWater && !overflowing;
-    eqrow.classList.toggle('ok', match);
-    eqSign.textContent = match ? '=' : inWater ? '…' : '?';
-    eqNote.textContent = match
-      ? '阿基米德原理'
-      : inWater
-        ? overflowing ? '水正在流进小烧杯' : '烧杯里有之前溢出的水，点「重做」再来'
-        : '把铝块放进水里看看';
-
-    if (now > noteUntil) {
-      const [n, text] = !inWater
-        ? ['1', '先读测力计：铝块在空气中有多重？']
-        : !full
-          ? ['2', '慢慢往下放，盯着测力计的指针']
-          : overflowing
-            ? ['3', '全部浸没了，等溢出的水流完']
-            : ['4', '比一比：浮力和溢出的水重'];
-      stepNo.textContent = n;
-      stepText.textContent = text;
-    }
-
-    const a = view.anchors();
-    placeTag(tags.G, a.G, 0, 1, `G ${d.weight}N`, arrowsOn);
-    placeTag(tags.Fb, a.Fb, -1, 0, `F浮 ${d.buoyancy}N`, arrowsOn && inWater);
-    placeTag(tags.Ft, a.Ft, 1, 0, `F拉 ${d.scaleReading}N`, arrowsOn);
-
-    requestAnimationFrame(frame);
-  }
-
-  /** Pin a label next to an arrow tip; sx/sy pick the side (-1, 0, 1). */
-  function placeTag(el: HTMLElement, p: THREE.Vector3, sx: number, sy: number, text: string, visible: boolean) {
-    proj.copy(p).project(view.camera);
-    const x = (proj.x * 0.5 + 0.5) * canvas.clientWidth + sx * 8;
-    const y = (-proj.y * 0.5 + 0.5) * canvas.clientHeight + sy * 10;
-    el.style.transform = `translate(${x}px, ${y}px) translate(${-50 + sx * 50}%, ${-50 + sy * 50}%)`;
-    el.style.opacity = visible ? '1' : '0';
-    if (el.textContent !== text) el.textContent = text;
-  }
-
+// loop
+const tags = { G: $('lblG'), Fb: $('lblB'), Ft: $('lblT'), N: $('lblN'), cup: $('lblCup') };
+const proj = new THREE.Vector3();
+let last = performance.now();
+function frame(now: number) {
+  const dt = Math.min((now - last) / 1000, 1 / 20);
+  last = now;
+  const f = ctl.frame(dt, now / 1000);
+  view.update(f);
+  view.render();
+  const a = view.anchors();
+  const L = ctl.labels;
+  placeTag(tags.G, a.G, 0, 1, L.G, arrowsOn);
+  placeTag(tags.Fb, a.Fb, -1, 0, L.Fb, arrowsOn);
+  placeTag(tags.Ft, a.Ft, 1, 0, L.Ft, arrowsOn);
+  placeTag(tags.N, a.N, 1, 0, L.N, arrowsOn);
+  placeTag(tags.cup, a.cup, -1, 0, L.cup, true);
   requestAnimationFrame(frame);
 }
 
-main();
+/** Pin a label next to an anchor; sx/sy pick the side (-1, 0, 1). */
+function placeTag(el: HTMLElement, p: THREE.Vector3, sx: number, sy: number, text: string | undefined, visible: boolean) {
+  proj.copy(p).project(view.camera);
+  const x = (proj.x * 0.5 + 0.5) * canvas.clientWidth + sx * 8;
+  const y = (-proj.y * 0.5 + 0.5) * canvas.clientHeight + sy * 10;
+  el.style.transform = `translate(${x}px, ${y}px) translate(${-50 + sx * 50}%, ${-50 + sy * 50}%)`;
+  el.style.opacity = visible && text ? '1' : '0';
+  if (text && el.textContent !== text) el.textContent = text;
+}
+
+requestAnimationFrame(frame);

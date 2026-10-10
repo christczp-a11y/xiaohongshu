@@ -25,7 +25,7 @@ export const CM3 = 1e-6; // m³ per cm³
 export const DEFAULT_SETUP: Setup = {
   cupRadius: 6,
   spoutHeight: 12,
-  cubeSide: 5,
+  cubeSide: 4.5, // small enough that iron and copper stay within a 0–10 N scale
   cubeDensity: 2700, // aluminium
   liquidDensity: 1000, // water
   g: 9.8,

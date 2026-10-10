@@ -8,57 +8,62 @@
 </head>
 <body>
 <main id="app">
+  <canvas id="c"></canvas>
+
   <header class="top">
-    <div class="title">浮力实验室<small>BUOYANCY LAB</small></div>
-    <button class="icon" id="aboutBtn" aria-label="关于">?</button>
+    <div class="brand">
+      <h1 class="title">浮力实验室</h1>
+      <div class="kicker">BUOYANCY LAB · 01</div>
+    </div>
+    <button class="round" id="aboutBtn" aria-label="关于">?</button>
   </header>
-  <nav class="tabs" role="tablist">
-    <button class="on" role="tab" aria-selected="true">称一称</button>
-    <button role="tab" disabled title="制作中">变一变</button>
-    <button role="tab" disabled title="制作中">浮还是沉</button>
+
+  <nav class="tabs" id="tabs" role="tablist">
+    <button class="tab on" role="tab" aria-selected="true">称一称</button>
+    <button class="tab" role="tab" disabled title="制作中">变一变<i class="lock"></i></button>
+    <button class="tab" role="tab" disabled title="制作中">浮还是沉<i class="lock"></i></button>
   </nav>
 
-  <section class="stage" id="stage">
-    <canvas id="c"></canvas>
-    <div class="chips">
-      <div class="chip"><b>液体</b>水</div>
-      <div class="chip"><b>物块</b>铝 · 125 cm³</div>
-      <button class="chip" id="arrowToggle" aria-pressed="true">受力箭头<span class="sw"></span></button>
-    </div>
-    <div class="label g" id="lblG">G</div>
-    <div class="label b" id="lblB">F浮</div>
-    <div class="hint" id="hint"><span class="hand">↕</span>上下拖动，把铝块放进水里</div>
-  </section>
+  <figure class="inset" id="inset">
+    <figcaption>放大看示数</figcaption>
+  </figure>
 
-  <section class="panels">
-    <div class="panel read">
-      <div class="grid">
-        <div><div class="k">物重 G（空气中）</div><div class="v a"><span id="vG">3.31</span><i>N</i></div></div>
-        <div><div class="k">测力计示数 F</div><div class="v"><span id="vF">3.31</span><i>N</i></div></div>
-        <div><div class="k">浮力 F浮 = G − F</div><div class="v c"><span id="vB">0.00</span><i>N</i></div></div>
-        <div><div class="k">小桶里的水重 G排</div><div class="v c"><span id="vP">0.00</span><i>N</i></div></div>
+  <div class="tag g" id="lblG">G</div>
+  <div class="tag b" id="lblB">F浮</div>
+  <div class="tag t" id="lblT">F拉</div>
+
+  <div class="hint" id="hint"><span class="hand">↕</span>上下拖动，把铝块放进水里</div>
+
+  <button class="chip" id="arrowToggle" aria-pressed="true">受力分析<span class="sw"></span></button>
+
+  <section class="dock" id="dock">
+    <div class="card">
+      <div class="guide"><b class="step" id="stepNo">1</b><span id="stepText">先读测力计：铝块在空气中有多重？</span></div>
+      <div class="meters">
+        <div class="m"><span class="k"><i class="dot g"></i>物重 G</span><b id="vG">3.31</b></div>
+        <div class="m"><span class="k"><i class="dot t"></i>示数 F拉</span><b id="vF">3.31</b></div>
+        <div class="m"><span class="k"><i class="dot b"></i>浮力 F浮</span><b id="vB">0.00</b></div>
+        <div class="m"><span class="k"><i class="dot w"></i>溢出水重 G排</span><b id="vP">0.00</b></div>
       </div>
-      <div class="eqrow" id="eqrow"><span>F浮</span><span class="eq" id="eqSign">?</span><span>G排</span><em id="eqNote">把铝块放进水里看看</em></div>
-      <button class="reset" id="reset">↺ 重做</button>
-    </div>
-    <div class="panel chal" id="chal">
-      <div class="h">挑战 · 先猜再验证</div>
-      <div class="q">铝块全部浸没以后，再往深处放，浮力会？</div>
-      <div class="opts"><button data-a="up">变大</button><button data-a="down">变小</button><button data-a="same">不变</button></div>
-      <div class="fb" id="fb"></div>
+      <div class="formula">单位 N　　F浮 = G − F拉</div>
+      <div class="eq" id="eqrow"><b>F浮</b><span class="sign" id="eqSign">?</span><b>G排</b><em id="eqNote">把铝块放进水里看看</em></div>
+      <div class="actions">
+        <button class="btn ghost" id="reset">↺ 重做</button>
+        <button class="btn primary" id="record">记录这组数据</button>
+      </div>
     </div>
   </section>
 
   <dialog id="about">
     <h3>关于浮力实验室</h3>
-    <p>弹簧测力计吊着一块铝块，慢慢放进装满水的溢水杯。溢出的水流进小桶，可以和浮力比一比。</p>
+    <p>弹簧测力计吊着一块铝块，慢慢放进装满水的溢水杯。溢出的水流进小烧杯，可以和浮力比一比。</p>
     <ul>
       <li>取 g = 9.8 N/kg，水的密度 1.0×10³ kg/m³，铝的密度 2.7×10³ kg/m³。</li>
       <li>简化：杯子是规则圆柱，不计表面张力和弯月面，水只从溢水口流出。</li>
       <li>数字保留两位小数；浮力由「物重 − 示数」算出。</li>
     </ul>
-    <p class="small">AI 辅助开发。知识点按《义务教育物理课程标准（2022 年版）》组织，未使用教材文字和插图。</p>
-    <form method="dialog"><button>知道了</button></form>
+    <p class="small">AI 辅助开发。知识点按《义务教育物理课程标准（2022 年版）》组织，未使用教材文字和插图。标题字体基于得意黑（atelierAnchor，SIL OFL 1.1）。</p>
+    <form method="dialog"><button class="btn primary">知道了</button></form>
   </dialog>
 </main>
 <script type="module" src="./src/main.ts"></script>

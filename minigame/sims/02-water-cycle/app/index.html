@@ -9,37 +9,39 @@
 <body>
 <div id="loading">正在搭建小世界…</div>
 
-<div id="top">
-  <div id="title" class="card">
-    <div class="eyebrow">水循环 · 动手看</div>
-    <h1>水去哪儿了？</h1>
-  </div>
-  <div id="meters" class="card">
-    <div class="meter">湖里的水<div class="bar"><div id="mLake" class="fill"></div></div></div>
-    <div class="meter">云里的水<div class="bar"><div id="mCloud" class="fill"></div></div></div>
-    <div class="meter">山坡上的水<div class="bar"><div id="mSoil" class="fill"></div></div></div>
-  </div>
-</div>
+<header id="head">
+  <div class="kicker"><span>WATER CYCLE</span><span>02</span></div>
+  <h1 class="display">水去<br />哪儿了？</h1>
+</header>
 
-<div id="hint">拖动<b>云朵</b>换地方 · <b>按住</b>云朵能挤出雨</div>
+<aside id="meters" class="glass">
+  <div class="meter"><span class="k">湖里的水</span><b id="nLake">0</b><div class="bar"><i id="mLake"></i></div></div>
+  <div class="meter"><span class="k">云里的水</span><b id="nCloud">0</b><div class="bar"><i id="mCloud"></i></div></div>
+  <div class="meter"><span class="k">山坡上的水</span><b id="nSoil">0</b><div class="bar"><i id="mSoil"></i></div></div>
+</aside>
 
-<div id="panel" class="card">
+<div id="hint" class="block dark">拖动<b>云朵</b>换地方 · <b>按住</b>云朵能挤出雨</div>
+
+<section id="panel" class="glass">
   <div id="chips">
-    <button class="chip" data-k="evap">蒸发<small>水变成汽</small></button>
-    <button class="chip" data-k="cond">凝结<small>汽变成云</small></button>
-    <button class="chip" data-k="rain">降水<small>云变成雨</small></button>
-    <button class="chip" data-k="flow">汇流<small>雨回到湖</small></button>
+    <button class="chip block" data-k="evap"><em>1</em>蒸发</button>
+    <button class="chip block" data-k="cond"><em>2</em>凝结</button>
+    <button class="chip block" data-k="rain"><em>3</em>降水</button>
+    <button class="chip block" data-k="flow"><em>4</em>汇流</button>
   </div>
-  <div id="explain">太阳、云、雨和小河，让水一直在转圈。试试拖动下面的<b>太阳时间</b>，或者拖动天上的<b>云朵</b>。</div>
+  <div id="explain">
+    <span id="stageNo" class="display">↻</span>
+    <p id="explainText">太阳、云、雨和小河，让水一直在转圈。试试拖动下面的<b>太阳时间</b>，或者拖动天上的<b>云朵</b>。</p>
+  </div>
   <div id="controls">
-    <label for="time">太阳时间</label>
+    <label for="time">太阳</label>
     <input id="time" type="range" min="4" max="20" step="0.05" value="10.5" />
     <span id="clock">10:30</span>
-    <button id="play" class="btn">▶ 播放</button>
-    <button id="reset" class="btn">重来</button>
+    <button id="play" class="block dark">▶ 播放</button>
+    <button id="reset" class="block">重来</button>
   </div>
   <div id="note">真实的水蒸气是看不见的，这里画成白点方便观察。AI 辅助开发。</div>
-</div>
+</section>
 
 <script type="module" src="./src/main.ts"></script>
 </body>

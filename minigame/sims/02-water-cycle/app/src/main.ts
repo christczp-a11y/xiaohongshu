@@ -346,6 +346,7 @@ function setTime(t: number) {
   scene.environmentIntensity = 0.12 + 0.5 * daylight;
   riverUniforms.uDay.value = 0.35 + 0.65 * daylight;
   document.body.style.background = '#' + bg.copy(nightBg).lerp(dayBg, smooth(0, 0.5, daylight)).getHexString();
+  document.body.classList.toggle('night', daylight < 0.25);
   const hh = Math.floor((t + 24) % 24), mm = Math.round((t % 1) * 60) % 60;
   $('clock').textContent = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
@@ -497,11 +498,12 @@ const TEXT: Record<Stage, string> = {
   rain: '<b>降水：</b>云里的小水滴越聚越多、越来越重，空气托不住了，就落下来变成雨。按住一朵云不放，也能把雨挤出来。',
   flow: '<b>汇流：</b>雨落在山坡上，顺着地势往低处流，汇成小河，最后又回到湖里。然后，水再一次被太阳晒上天。',
 };
-const explain = $('explain');
+const explainText = $('explainText'), stageNo = $('stageNo');
+const ORDER: Stage[] = ['evap', 'cond', 'rain', 'flow'];
 const chips = Object.fromEntries([...document.querySelectorAll<HTMLButtonElement>('.chip')].map(b => [b.dataset.k as Stage, b])) as Record<Stage, HTMLButtonElement>;
 let heldUntil = 0, lastShown: Stage | null = null;
 const shownAt: Partial<Record<Stage, number>> = {};
-function show(k: Stage, ms: number) { explain.innerHTML = TEXT[k]; lastShown = k; shownAt[k] = performance.now(); heldUntil = performance.now() + ms; }
+function show(k: Stage, ms: number) { explainText.innerHTML = TEXT[k]; stageNo.textContent = String(ORDER.indexOf(k) + 1); lastShown = k; shownAt[k] = performance.now(); heldUntil = performance.now() + ms; }
 (Object.keys(chips) as Stage[]).forEach(k => chips[k].addEventListener('click', () => show(k, 9000)));
 
 const timeInput = $<HTMLInputElement>('time');
@@ -514,7 +516,8 @@ const hint = $('hint');
 function hideHint() { hint.style.opacity = '0'; }
 setTimeout(hideHint, 9000);
 setTime(timeT);
-const mLake = $('mLake'), mCloud = $('mCloud'), mSoil = $('mSoil');
+const mLake = $('mLake'), mCloud = $('mCloud'), mSoil = $('mSoil'), nLake = $('nLake'), nCloud = $('nCloud'), nSoil = $('nSoil');
+function meter(bar: HTMLElement, num: HTMLElement, v: number) { const pct = Math.round(Math.min(1, Math.max(0, v)) * 100); bar.style.width = pct + '%'; num.textContent = String(pct); }
 
 // ---------- main loop ----------
 const timer = new THREE.Timer();
@@ -613,9 +616,9 @@ function frame(stamp?: number) {
       const next = (['rain', 'flow', 'cond', 'evap'] as Stage[]).find(k => active[k] && k !== lastShown && now - (shownAt[k] ?? 0) > 12000);
       if (next) show(next, 7000);
     }
-    mLake.style.width = (lake * 100).toFixed(1) + '%';
-    mCloud.style.width = (clouds.reduce((s, c) => s + c.water, 0) / clouds.length * 100).toFixed(1) + '%';
-    mSoil.style.width = Math.min(100, soil * 400).toFixed(1) + '%';
+    meter(mLake, nLake, lake);
+    meter(mCloud, nCloud, clouds.reduce((s, c) => s + c.water, 0) / clouds.length);
+    meter(mSoil, nSoil, soil * 4);
   }
 
   controls.update();

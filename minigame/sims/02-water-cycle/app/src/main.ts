@@ -601,13 +601,15 @@ function start(renderer: THREE.WebGLRenderer) {
 
   // ---------- main loop ----------
   const timer = new THREE.Timer();
-  let uiTick = 0, rafId = 0, running = false, halted = false, slowTime = 0, sampleTime = 0;
+  let uiTick = 0, rafId = 0, running = false, halted = false, slowTime = 0, sampleTime = 0, skipUntil = 0;
   function loop(stamp: number) { rafId = requestAnimationFrame(loop); frame(stamp); }
-  function startLoop() { if (running) return; running = true; timer.reset(); slowTime = sampleTime = 0; rafId = requestAnimationFrame(loop); }
+  function startLoop() { if (running) return; running = true; timer.reset(); slowTime = sampleTime = 0; skipUntil = performance.now() + 1000; rafId = requestAnimationFrame(loop); }
   function stopLoop() { running = false; cancelAnimationFrame(rafId); }
 
   // step down when frames stay slow; at the lowest tier fall back to the still picture
   function watchFrameTime(raw: number) {
+    // the first second after start or a tier change compiles shaders; a single long stall is not a slow phone
+    if (performance.now() < skipUntil || raw > 0.5) return;
     sampleTime += raw;
     // slow = below ~24 fps; at the lowest tier only give up below ~12 fps (no longer interactive)
     if (raw > (tier < 2 ? 1 / 24 : 1 / 12)) slowTime += raw;
@@ -615,7 +617,7 @@ function start(renderer: THREE.WebGLRenderer) {
     const slowShare = slowTime / sampleTime;
     slowTime = sampleTime = 0;
     if (slowShare < 0.5) return;
-    if (tier < 2) setTier(tier + 1);
+    if (tier < 2) { setTier(tier + 1); skipUntil = performance.now() + 1000; }
     else { halted = true; stopLoop(); showFallback('这台设备画 3D 有点吃力，先看看静态的展台吧。'); }
   }
 

@@ -1,0 +1,189 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:NS;font-weight:900;src:url(noto900.woff2)}
+@font-face{font-family:NS;font-weight:700;src:url(noto700.woff2)}
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#f5f5f7}
+#stage{position:relative;width:1080px;height:1920px;overflow:hidden;
+  background:radial-gradient(1300px 1000px at 50% 46%,#ffffff 0%,#f5f5f7 58%,#e9e9ed 100%);color:#1d1d1f}
+.en{font-family:'Inter Display',Inter,sans-serif}
+.zh{font-family:'Inter Display',NS,sans-serif}
+#persp{position:absolute;inset:0;perspective:2600px;perspective-origin:50% 40%}
+#cam{position:absolute;left:0;top:0;width:1080px;height:1920px;transform-origin:0 0}
+#shadow{position:absolute;left:190px;top:1760px;width:700px;height:90px;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(0,0,0,.28),rgba(0,0,0,0));filter:blur(6px)}
+#phone{position:absolute;left:163.5px;top:224px;width:753px;height:1592px;border-radius:96px;
+  background:linear-gradient(145deg,#4a4a4f,#1d1d1f 30%,#2c2c30 70%,#5a5a60);transform-origin:50% 60%;
+  box-shadow:0 70px 140px -40px rgba(0,0,0,.40),0 30px 60px -25px rgba(0,0,0,.25)}
+#bezel{position:absolute;left:7px;top:7px;right:7px;bottom:7px;border-radius:90px;background:#0b0b0c}
+#screen{position:absolute;left:16px;top:16px;width:721px;height:1560px;border-radius:80px;overflow:hidden;background:#eee}
+#screen img{position:absolute;left:0;top:0;width:721px;height:1560px}
+#glare{position:absolute;inset:0;background:linear-gradient(115deg,rgba(255,255,255,.18) 0%,rgba(255,255,255,0) 28%);pointer-events:none}
+#touch{position:absolute;width:88px;height:88px;margin:-44px 0 0 -44px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,.75) 0%,rgba(255,255,255,.35) 60%,rgba(255,255,255,.15) 100%);
+  border:2.5px solid rgba(29,29,31,.28);box-shadow:0 10px 30px rgba(0,0,0,.20);opacity:0}
+.k{position:absolute;left:0;right:0;text-align:center}
+#eyebrow{top:700px;font-weight:600;font-size:38px;letter-spacing:18px;color:#86868b}
+#title{top:770px;font-weight:900;font-size:176px;letter-spacing:6px;line-height:1.15;height:210px}
+#title span{display:inline-block;overflow:hidden;vertical-align:top}
+#title span i{display:inline-block;font-style:normal}
+#flag{top:1010px;font-weight:500;font-size:44px;letter-spacing:3px;color:#6e6e73}
+#bar{position:absolute;left:390px;width:300px;top:1090px;height:6px;border-radius:3px;background:#dcdce0;overflow:hidden}
+#bar b{position:absolute;left:0;top:0;bottom:0;width:0;background:#1d1d1f;border-radius:3px}
+#topfade{position:absolute;left:0;right:0;top:0;height:400px;background:linear-gradient(#f7f7f9 60%,rgba(247,247,249,0));opacity:0}
+#chap{top:70px;font-weight:600;font-size:34px;letter-spacing:6px;color:#86868b;opacity:0}
+#chap em{font-style:normal;color:#1d1d1f;font-family:NS;font-weight:700;letter-spacing:4px;margin-left:14px}
+.cap{top:124px;font-weight:900;font-size:80px;letter-spacing:2px;opacity:0;white-space:nowrap}
+.cap b{color:#0071e3;font-weight:900}
+#end1{top:1290px;font-weight:900;font-size:86px;letter-spacing:2px;opacity:0}
+#end2{top:1410px;font-weight:700;font-size:44px;letter-spacing:2px;color:#6e6e73;opacity:0}
+#end3{top:1560px;opacity:0}
+#end3 .row{display:flex;align-items:center;justify-content:center;gap:28px;font-size:40px;font-weight:600;letter-spacing:4px;color:#1d1d1f}
+#end3 .row span{color:#86868b;font-weight:500}
+#ebar{width:420px;height:8px;border-radius:4px;background:#dcdce0;position:relative;overflow:hidden}
+#ebar b{position:absolute;left:0;top:0;bottom:0;width:0;background:#1d1d1f;border-radius:4px}
+#end4{top:1760px;font-weight:800;font-size:44px;letter-spacing:16px;opacity:0}
+</style></head><body>
+<div id="stage">
+  <div id="persp"><div id="cam">
+    <div id="shadow"></div>
+    <div id="phone"><div id="bezel"></div><div id="screen"><img id="shot"><div id="touch"></div><div id="glare"></div></div></div>
+  </div></div>
+  <div id="topfade"></div>
+  <div class="k en" id="eyebrow">DAY 1</div>
+  <div class="k zh" id="title"></div>
+  <div class="k en" id="flag">Flag&nbsp;&nbsp;1 / 365</div>
+  <div id="bar"><b></b></div>
+  <div class="k en" id="chap"><span id="chapNo">01 / 03</span><em id="chapName">称一称</em><span id="ff" style="margin-left:18px;opacity:0">▶▶ 快进</span></div>
+  <div class="k zh cap" id="c1">放进水里，示数变小</div>
+  <div class="k zh cap" id="c1b">接住溢出来的水</div>
+  <div class="k zh cap" id="c2"><b>F浮</b> = 排开的水重</div>
+  <div class="k zh cap" id="c3a">浸得越深，<b>浮力越大</b></div>
+  <div class="k zh cap" id="c3">浸没以后，就不变了</div>
+  <div class="k zh cap" id="c4">换成盐水，<b>浮力变大</b></div>
+  <div class="k zh cap" id="c5">松手，浮还是沉？</div>
+  <div class="k zh cap" id="c6">密度比水小，<b>浮起来</b></div>
+  <div class="k zh" id="end1">笔记下方点「用一用」</div>
+  <div class="k zh" id="end2">手机上直接玩，不用下载</div>
+  <div class="k en" id="end3"><div class="row">Flag<div id="ebar"><b></b></div><span>1 / 365</span></div></div>
+  <div class="k en" id="end4">G-MAN</div>
+</div>
+<script>
+const FPS = 30, SIM0 = 2.2, NSIM = 300;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const outExpo = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x));
+const outQuint = (x) => 1 - Math.pow(1 - x, 5);
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const $ = (id) => document.getElementById(id);
+const TITLE = '浮力实验室';
+$('title').innerHTML = [...TITLE].map((c) => `<span><i>${c}</i></span>`).join('');
+let ptr = [];
+// camera keys: [time, scale, focus x, focus y] in sim css px (390x844)
+const CAM = [
+  [0, 1, 195, 422], [2.05, 1, 195, 422], [3.0, 1.2, 195, 525], [3.9, 1.2, 195, 525],
+  [4.6, 1.6, 195, 735], [6.35, 1.6, 195, 735], [6.85, 1.12, 195, 560], [8.3, 1.12, 195, 560],
+  [8.8, 1.5, 195, 650], [9.85, 1.5, 195, 650], [10.35, 1.3, 195, 450], [11.9, 1.3, 195, 450], [12.6, 1, 195, 422],
+];
+let MAP = [[0, 0], [15, 0]];
+window.setEvents = (E) => {
+  MAP = [[0, 0], [2.2, 0], [3.8, E.weighDragEnd], [5.5, E.eqLit], [6.4, E.vary - 1], [6.42, E.vary],
+    [8.4, E.varyDragEnd + 6], [8.6, E.brine], [9.88, E.float - 1], [9.9, E.float], [10.3, E.drop], [11.3, E.drop + 58], [11.9, E.total - 1], [15, E.total - 1]];
+};
+function simFrame(t) {
+  let i = 0;
+  while (i < MAP.length - 2 && t >= MAP[i + 1][0]) i++;
+  const a = MAP[i], b = MAP[i + 1];
+  return Math.round(lerp(a[1], b[1], seg(t, a[0], b[0])));
+}
+const SX = 163.5 + 16, SY = 224 + 16, K = 721 / 390;
+function camAt(t) {
+  let i = 0;
+  while (i < CAM.length - 2 && t >= CAM[i + 1][0]) i++;
+  const a = CAM[i], b = CAM[i + 1];
+  const k = inOut(seg(t, a[0], b[0]));
+  return [lerp(a[1], b[1], k), lerp(a[2], b[2], k), lerp(a[3], b[3], k)];
+}
+function show(id, t, a, b) {
+  const i = outQuint(seg(t, a, a + 0.6)), o = inOut(seg(t, b - 0.28, b));
+  const el = $(id);
+  el.style.opacity = i * (1 - o);
+  el.style.transform = `translateY(${(1 - i) * 34 - o * 16}px)`;
+  el.style.filter = `blur(${(1 - i) * 10 + o * 6}px)`;
+}
+const CHAPS = [[2.3, 6.42, '01 / 03', '称一称'], [6.42, 9.9, '02 / 03', '变一变'], [9.9, 12.05, '03 / 03', '浮还是沉']];
+window.render = async (fi) => {
+  const t = fi / FPS;
+  const sf = simFrame(t);
+  const img = $('shot'), src = `frames2/f${String(sf).padStart(3, '0')}.png`;
+  if (!img.src.endsWith(src)) { img.src = src; await img.decode(); }
+
+  // ---- intro
+  const leave = inOut(seg(t, 0.95, 1.35));
+  const eb = outQuint(seg(t, 0.0, 0.7));
+  $('eyebrow').style.opacity = eb * (1 - leave);
+  $('eyebrow').style.transform = `translateY(${(1 - eb) * 24 - leave * 140}px)`;
+  $('eyebrow').style.letterSpacing = lerp(30, 18, eb) + 'px';
+  [...$('title').querySelectorAll('i')].forEach((el, n) => {
+    const k = outExpo(seg(t, 0.12 + n * 0.06, 0.82 + n * 0.06));
+    el.style.transform = `translateY(${(1 - k) * 105}%)`;
+  });
+  $('title').style.opacity = 1 - leave;
+  $('title').style.transform = `translateY(${-leave * 170}px)`;
+  $('title').style.filter = `blur(${leave * 8}px)`;
+  const fl = outQuint(seg(t, 0.55, 1.1));
+  $('flag').style.opacity = fl * (1 - leave);
+  $('flag').style.transform = `translateY(${(1 - fl) * 26 - leave * 200}px)`;
+  $('bar').style.opacity = fl * (1 - leave);
+  $('bar').style.transform = `translateY(${-leave * 200}px)`;
+  $('bar').firstChild.style.width = Math.max(6, outExpo(seg(t, 0.7, 1.2)) * 300 / 365 * 1) + 'px';
+
+  // ---- phone
+  const enter = outExpo(seg(t, 1.4, 2.5));
+  const exit = inOut(seg(t, 12.0, 12.85));
+  const [s, fx, fy] = camAt(t);
+  const px = SX + fx * K, py = SY + fy * K;
+  let X = 540 - px * s, Y = 1020 - py * s, S = s;
+  const es = lerp(1, 0.47, exit), cy = lerp(1020, 640, exit);
+  X = 540 + (X - 540) * es; Y = cy + (Y - 1020) * es; S *= es;
+  Y += (1 - enter) * 1900;
+  $('cam').style.transform = `translate(${X}px,${Y}px) scale(${S})`;
+  $('phone').style.transform = `rotateX(${(1 - enter) * 26}deg)`;
+  $('shadow').style.opacity = enter * (1 - seg(t, 2.6, 3.4) * 0.5 - exit * 0.2);
+
+  // ---- captions
+  $('topfade').style.opacity = clamp((t - 2.2) * 4) * (1 - inOut(seg(t, 11.9, 12.4)));
+  show('c1', t, 2.4, 3.75);
+  show('c1b', t, 3.8, 5.45);
+  show('c2', t, 5.5, 6.4);
+  show('c3a', t, 6.5, 7.6);
+  show('c3', t, 7.62, 8.5);
+  show('c4', t, 8.55, 9.9);
+  show('c5', t, 9.95, 10.9);
+  show('c6', t, 10.95, 12.05);
+  const ch = CHAPS.find((c) => t >= c[0] && t < c[1]);
+  const chIn = outQuint(seg(t, 2.3, 2.8)) * (1 - inOut(seg(t, 11.85, 12.1)));
+  $('chap').style.opacity = ch ? chIn : 0;
+  $('ff').style.opacity = seg(t, 3.8, 4.0) * (1 - seg(t, 5.35, 5.5));
+  if (ch) { $('chapNo').textContent = ch[2]; $('chapName').textContent = ch[3]; }
+
+  // ---- end card
+  const e1 = outQuint(seg(t, 12.5, 13.2)), e2 = outQuint(seg(t, 12.7, 13.4)), e3 = outQuint(seg(t, 12.95, 13.6)), e4 = outQuint(seg(t, 13.25, 13.95));
+  for (const [id, k, d] of [['end1', e1, 40], ['end2', e2, 30], ['end3', e3, 24], ['end4', e4, 20]]) {
+    $(id).style.opacity = k; $(id).style.transform = `translateY(${(1 - k) * d}px)`; $(id).style.filter = `blur(${(1 - k) * 8}px)`;
+  }
+  $('end4').style.letterSpacing = lerp(30, 16, e4) + 'px';
+  $('ebar').firstChild.style.width = Math.max(0, outExpo(seg(t, 13.2, 14.0)) * Math.max(8, 420 / 365)) + 'px';
+
+  // ---- touch
+  const pp = t >= SIM0 && t < 12 ? ptr[sf] : null;
+  const tch = $('touch');
+  if (pp) {
+    tch.style.left = pp.x * K + 'px'; tch.style.top = pp.y * K + 'px';
+    if (pp.down) { tch.style.opacity = 1; tch.style.transform = 'scale(0.92)'; }
+    else { const k = pp.tap / 10; tch.style.opacity = 1 - k * k; tch.style.transform = `scale(${0.85 + k * 0.6})`; }
+  } else tch.style.opacity = 0;
+};
+window.setPtr = (p) => { ptr = p; };
+</script></body></html>

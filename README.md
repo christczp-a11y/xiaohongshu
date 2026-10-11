@@ -28,7 +28,7 @@ npm install
 npm run dev     # 本地预览
 npm test        # 物理模型测试
 npm run build   # 打包成 dist/index.html（离线单文件，挂网站用）
-npm run minitool   # 打包小红书小工具：dist-minitool/ 和 buoyancy-lab-minitool.zip
+npm run minitool   # 打包小红书小工具：dist-minitool/ 和 buoyancy-lab.zip（版本号读 package.json，要和页面上、平台上填的一致）
 ```
 
 ## 历史

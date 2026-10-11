@@ -23,10 +23,6 @@ const H_MAX = DEFAULT_SETUP.spoutHeight - MIN_BOTTOM; // deepest the cube can go
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const params = new URLSearchParams(location.search);
-// inside the 小红书 container its back / share buttons float over the top corners: leave them room
-const markContainer = () => { if ((window as unknown as { xhs?: unknown }).xhs) document.documentElement.classList.add('in-xhs'); };
-markContainer();
-setTimeout(markContainer, 600);
 const pose = params.get('pose');
 
 const canvas = $<HTMLCanvasElement>('c');
@@ -607,7 +603,6 @@ function run(view: SceneView) {
   const dock = $('dock');
   const tabs = $('tabs');
   const insetEl = $('inset');
-  const chip = $('arrowToggle');
   function layout() {
     const W = canvas.clientWidth;
     const H = canvas.clientHeight;
@@ -623,11 +618,12 @@ function run(view: SceneView) {
       const b = insetEl.clientLeft;
       view.setInset({ x: r.left + b, y: r.top + b, w: r.width - 2 * b, h: r.height - 2 * b });
     }
-    // portrait: one row above the 受力分析 chip so the two never overlap
-    hint.style.bottom = landscape.matches ? '24px' : `${H - d.top + 14 + chip.offsetHeight + 12}px`;
-    chip.style.top = landscape.matches ? '' : `${d.top - chip.offsetHeight - 14}px`;
   }
   window.addEventListener('resize', layout);
+  window.addEventListener('orientationchange', layout);
+  window.addEventListener('pageshow', layout);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', layout);
+  if (document.fonts) document.fonts.ready.then(layout, () => {});
   setMode(mode);
 
   // --- loop ---------------------------------------------------------------------------------------
@@ -705,7 +701,19 @@ function run(view: SceneView) {
     showFallback('画面暂停了。点下面的按钮重新打开。', true);
   });
 
-  let layoutCheck = 0, layoutKey = '';
+  // The phone's safe areas, fonts and the panel's height can all settle after the first layout
+  // without a resize event; the 3D framing and the close-up follow them on a clock.
+  let layoutAt = 0;
+  let layoutKey = '';
+  function layoutChanged() {
+    const r = insetEl.getBoundingClientRect();
+    const d = dock.getBoundingClientRect();
+    const t = tabs.getBoundingClientRect();
+    const key = [canvas.clientWidth, canvas.clientHeight, d.top, d.height, t.bottom, r.left, r.top, r.width, r.height].join('|');
+    if (key === layoutKey) return false;
+    layoutKey = key;
+    return true;
+  }
   function frame(now: number) {
     if (!running || halted) return;
     rafId = requestAnimationFrame(frame);
@@ -716,10 +724,9 @@ function run(view: SceneView) {
     const f = ctl.frame(dt, now / 1000);
     view.update(f);
     view.render();
-    // the panel can grow after the first layout (fonts, step text): keep the 受力分析 chip and hint above it
-    if (++layoutCheck % 15 === 0) {
-      const key = `${dock.offsetTop}|${dock.offsetHeight}|${tabs.offsetTop + tabs.offsetHeight}`;
-      if (key !== layoutKey) { layoutKey = key; layout(); }
+    if (now - layoutAt > 250) {
+      layoutAt = now;
+      if (layoutChanged()) layout();
     }
     const a = view.anchors();
     const L = ctl.labels;

@@ -7,7 +7,7 @@ import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, w
 import { crc32, deflateRawSync } from 'node:zlib';
 
 const OUT = 'dist-minitool';
-const ZIP = 'buoyancy-lab-minitool.zip';
+const ZIP = 'buoyancy-lab.zip';
 const TARGET = ['es2017', 'chrome61'];
 
 rmSync(OUT, { recursive: true, force: true });
@@ -24,8 +24,13 @@ await build({
   outfile: `${OUT}/style.css`, logLevel: 'warning',
 });
 
+// the version on the page is how Chris tells which package the phone is running; it must match
+// the 版本号 typed into the platform, so it comes from package.json and is checked here
+const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
 let html = readFileSync('index.html', 'utf8');
+if (!html.includes(`v${version}<`)) throw new Error(`index.html: page should show v${version}`);
 const swaps = [
+  ['<html lang="zh-CN">', '<html lang="zh-CN" class="minitool">'],
   ['<link rel="stylesheet" href="./src/style.css" />', '<link rel="stylesheet" href="./style.css" />'],
   ['<script type="module" src="./src/main.ts"></script>', '<script src="./main.js"></script>'],
 ];
@@ -74,4 +79,4 @@ end.writeUInt32LE(cenBuf.length, 12); end.writeUInt32LE(offset, 16);
 writeFileSync(ZIP, Buffer.concat([...local, cenBuf, end]));
 
 for (const f of files) console.log(`${OUT}/${f}  ${statSync(`${OUT}/${f}`).size} bytes`);
-console.log(`${ZIP}  ${statSync(ZIP).size} bytes`);
+console.log(`${ZIP}  ${statSync(ZIP).size} bytes  (v${version})`);

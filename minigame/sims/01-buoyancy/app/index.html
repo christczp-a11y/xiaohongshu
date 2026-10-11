@@ -12,7 +12,7 @@
 
   <header class="top">
     <div class="brand">
-      <div class="kicker"><span>BUOYANCY LAB</span><span>01</span></div>
+      <div class="kicker"><span>BUOYANCY LAB</span><span>01 · v1.0.3</span></div>
       <h1 class="title">浮力实验室</h1>
     </div>
     <button class="round key" id="aboutBtn" aria-label="关于">?</button>
@@ -34,11 +34,10 @@
   <div class="tag t" id="lblN">F支</div>
   <div class="tag cup" id="lblCup">水</div>
 
-  <div class="hint" id="hint"><span class="hand">↕</span><span id="hintText">上下拖动，把铝块放进水里</span></div>
-
-  <button class="chip key" id="arrowToggle" aria-pressed="true">受力分析<span class="sw"></span></button>
-
   <section class="dock" id="dock">
+    <!-- children of the panel, so CSS keeps them just above it however tall it gets -->
+    <div class="hint" id="hint"><span class="hand">↕</span><span id="hintText">上下拖动，把铝块放进水里</span></div>
+    <button class="chip key" id="arrowToggle" aria-pressed="true">受力分析<span class="sw"></span></button>
     <div class="card">
       <!-- 称一称 -->
       <div class="panel" data-for="weigh">

@@ -97,9 +97,9 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .tag.b { background: var(--accent); color: #fff; box-shadow: 0 3px 0 var(--accent-edge); }
 .tag.cup { font-family: var(--sans); font-weight: 600; color: var(--ink-2); }
 
-.hint { position: absolute; left: 50%; transform: translateX(-50%); font-size: 13px; font-weight: 700; white-space: nowrap;
-  padding: 9px 15px; border-radius: 12px; background: var(--dark); color: #fff;
-  box-shadow: 0 4px 0 var(--dark-edge), 0 14px 24px rgba(0, 0, 0, 0.16); transition: opacity 0.5s; }
+.hint { position: absolute; right: 14px; font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; padding: 7px 11px; border-radius: 11px; background: rgba(255, 255, 255, 0.92); color: var(--ink);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 3px 0 var(--key-edge); transition: opacity 0.5s; }
 .hint .hand { display: inline-block; margin-right: 7px; animation: bob 1.4s ease-in-out infinite; }
 .hint.gone { opacity: 0; pointer-events: none; }
 @keyframes bob { 50% { transform: translateY(3px); } }
@@ -114,10 +114,12 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 [aria-pressed='false'] .sw::after { left: 3px; }
 
 /* --- reading panel -------------------------------------------------------------------------------- */
-.dock { position: absolute; left: 12px; right: 12px; bottom: calc(var(--safe-b) + 16px); }
-.card { border-radius: 22px; background: #fff; padding: 12px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 6px 0 var(--well-edge), 0 24px 44px rgba(0, 0, 0, 0.12); }
-.guide { display: flex; align-items: center; padding: 0 2px; min-height: 26px; font-size: 14.5px; font-weight: 700; }
+.dock { position: absolute; left: 0; right: 0; bottom: 0; }
+/* portrait: a sheet flush with the screen's bottom edge; the home-indicator area is padding inside it */
+.card { border-radius: 22px 22px 0 0; background: #fff; padding: 10px 12px 10px;
+  padding-bottom: calc(var(--safe-b) + 14px);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 -10px 30px rgba(0, 0, 0, 0.10); }
+.guide { display: flex; align-items: center; padding: 0 2px; min-height: 26px; font-size: 14px; font-weight: 700; }
 .guide span { flex: 1; min-width: 0; }
 /* 重做 sits at the end of the step line, so the panel needs no button row */
 .redo { flex: none; height: 30px; margin-left: 10px; padding: 0 12px; border-radius: 9px; font-family: var(--display);
@@ -127,30 +129,30 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   font-style: normal; box-shadow: 0 2px 0 var(--dark-edge); }
 .step.dotted { width: 10px; height: 10px; border-radius: 2px; margin: 0 18px 0 8px; box-shadow: none; }
 
-.picks { display: grid; grid-template-columns: 1fr 1fr; grid-gap: 12px; margin-top: 12px; padding-top: 10px;
+.picks { display: grid; grid-template-columns: 1fr 1fr; grid-gap: 12px; margin-top: 8px; padding-top: 7px;
   border-top: 1px solid var(--well-edge); }
 .picks.lead { grid-template-columns: 4fr 3fr; }
 .pick { min-width: 0; }
-.pick .lbl { display: block; margin: 0 0 5px 1px; font-size: 11px; font-weight: 700; color: var(--ink-3); letter-spacing: 1px; }
+.pick .lbl { display: block; margin: 0 0 4px 1px; font-size: 10.5px; font-weight: 700; color: var(--ink-3); letter-spacing: 1px; }
 .seg { display: flex; }
-.seg button { flex: 1; min-width: 0; height: 30px; border-radius: 9px; font-family: var(--display); font-weight: 700; font-size: 14px;
+.seg button { flex: 1; min-width: 0; height: 28px; border-radius: 9px; font-family: var(--display); font-weight: 700; font-size: 14px;
   white-space: nowrap; --depth: 3px; }
 .seg button + button { margin-left: 5px; }
 
-.meters { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; grid-gap: 6px; margin-top: 12px; }
-.m { border-radius: 12px; background: var(--well); padding: 7px 8px 7px; box-shadow: inset 0 -3px 0 var(--well-edge); }
+.meters { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; grid-gap: 6px; margin-top: 8px; }
+.m { border-radius: 11px; background: var(--well); padding: 5px 8px 6px; box-shadow: inset 0 -3px 0 var(--well-edge); }
 .m .k { display: flex; align-items: center; font-size: 10.5px; font-weight: 600; color: var(--ink-2);
   white-space: nowrap; overflow: hidden; }
-.m b { display: block; margin-top: 2px; font-family: var(--grot); font-size: 24px; line-height: 1.1; font-weight: 700;
+.m b { display: block; margin-top: 1px; font-family: var(--grot); font-size: 21px; line-height: 1.1; font-weight: 700;
   letter-spacing: -0.8px; font-variant-numeric: tabular-nums; }
 .dot { flex: none; width: 7px; height: 7px; margin-right: 4px; border-radius: 1.5px; }
 .dot.g { background: var(--dark); }
 .dot.t { background: var(--ink-3); }
 .dot.b { background: var(--accent); }
 .dot.w { box-shadow: inset 0 0 0 1.5px var(--accent); }
-.formula { margin-top: 7px; padding-left: 2px; font-size: 11px; color: var(--ink-3); letter-spacing: 0.5px; }
+.formula { margin-top: 5px; padding-left: 2px; font-size: 11px; color: var(--ink-3); letter-spacing: 0.5px; }
 
-.eq { margin-top: 9px; display: flex; align-items: center; height: 40px; padding: 0 12px; border-radius: 12px;
+.eq { margin-top: 7px; display: flex; align-items: center; height: 36px; padding: 0 12px; border-radius: 12px;
   background: var(--well); box-shadow: inset 0 -3px 0 var(--well-edge); color: var(--ink-2);
   font-family: var(--grot); font-size: 16px; font-weight: 700; transition: background 0.3s, color 0.3s, box-shadow 0.3s; }
 .eq > * + * { margin-left: 10px; }
@@ -160,16 +162,16 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .eq.ok { background: var(--dark); color: #fff; box-shadow: 0 4px 0 var(--dark-edge); }
 .eq.ok .sign { box-shadow: none; }
 
-.actions { display: grid; grid-template-columns: 1fr 2.1fr; grid-gap: 10px; margin-top: 12px; }
-.btn { height: 46px; border-radius: 14px; font-family: var(--display); font-weight: 700; font-size: 16px; --depth: 5px; }
+.actions { display: grid; grid-template-columns: 1fr 2.1fr; grid-gap: 10px; margin-top: 9px; }
+.btn { height: 42px; border-radius: 14px; font-family: var(--display); font-weight: 700; font-size: 16px; --depth: 5px; }
 .btn:not(.primary):not(:disabled) { background: var(--well); --edge: var(--key-edge); --rim: transparent; }
 
-.chart { margin-top: 12px; border-radius: 12px; background: var(--well); box-shadow: inset 0 -3px 0 var(--well-edge);
-  padding: 8px 8px 6px; }
+.chart { margin-top: 8px; border-radius: 11px; background: var(--well); box-shadow: inset 0 -3px 0 var(--well-edge);
+  padding: 6px 8px 4px; }
 .chart-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 700;
   color: var(--ink-2); letter-spacing: 0.5px; }
 .chart-head button { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 7px; --depth: 2px; }
-#chart { display: block; width: 100%; height: 92px; margin-top: 2px; }
+#chart { display: block; width: 100%; height: 74px; margin-top: 1px; }
 
 /* --- 关于: a plain overlay (older WebViews have no <dialog>) ------------------------------------- */
 .sheet { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 5; display: flex; align-items: center;
@@ -204,11 +206,19 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   .tabs { right: auto; width: 380px; }
   .inset { right: 392px; top: auto; bottom: 26px; }
   .chip { left: 14px; bottom: 26px; top: auto !important; }
+  .card { border-radius: 22px; padding: 12px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 6px 0 var(--well-edge), 0 24px 44px rgba(0, 0, 0, 0.12); }
+  .hint { right: auto; left: 50%; transform: translateX(-50%); }
 }
 
+/* short phones: a smaller zoom window so it clears the toggle / hint row */
+@media (max-height: 740px) and (max-aspect-ratio: 1/1) {
+  .inset { width: 92px; height: 116px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .hint .hand { animation: none; }
 }
 
 /* build stamp, so a phone screenshot shows which package is running */
-#build { position: fixed; right: 6px; bottom: 2px; padding: 2px 5px; border-radius: 4px; background: rgba(255, 255, 255, .8); font: 9px/1 -apple-system, sans-serif; color: rgba(0, 0, 0, .45); pointer-events: none; z-index: 5; }
+/* sits in the empty middle of the top strip kept for the container's buttons */
+#build { position: fixed; left: 50%; top: calc(var(--safe-t) - 26px); transform: translateX(-50%); padding: 2px 5px; border-radius: 4px; background: rgba(255, 255, 255, .8); font: 9px/1 -apple-system, sans-serif; color: rgba(0, 0, 0, .45); white-space: nowrap; pointer-events: none; z-index: 5; }

@@ -626,10 +626,13 @@ function run(view: SceneView) {
     // portrait: one row above the 受力分析 chip so the two never overlap
     // the chip is anchored by its bottom edge: on iPhone its own height can still read 0 at the first
     // layout, and placing it by its top then put it behind the panel
-    const chipH = chip.offsetHeight || 36;
-    hint.style.bottom = landscape.matches ? '24px' : `${H - d.top + 14 + chipH + 12}px`;
+    // portrait: the hint shares the toggle's row (right side), so nothing floats over the apparatus
+    const chipH = chip.offsetHeight || 32, chipW = chip.offsetWidth || 110;
+    const rowBottom = H - d.top + 12;
     chip.style.top = '';
-    chip.style.bottom = landscape.matches ? '' : `${H - d.top + 14}px`;
+    chip.style.bottom = landscape.matches ? '' : `${rowBottom}px`;
+    hint.style.bottom = landscape.matches ? '24px' : `${rowBottom + Math.max(0, (chipH - 30) / 2)}px`;
+    hint.style.maxWidth = landscape.matches ? '' : `${Math.max(120, W - 14 - chipW - 10 - 14)}px`;
   }
   window.addEventListener('resize', layout);
   setMode(mode);

@@ -18,6 +18,7 @@ npm install
 npm run dev     # 本地预览
 npm test        # 地形测试
 npm run build   # 打包成 dist/index.html（离线单文件）
+npm run minitool   # 打包小红书小工具 zip（water-cycle-minitool.zip）
 ```
 
 ## 运行浮力实验室

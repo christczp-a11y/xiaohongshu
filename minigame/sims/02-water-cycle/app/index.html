@@ -1,8 +1,8 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>水去哪儿了</title>
 <link rel="stylesheet" href="./src/style.css" />
 </head>
@@ -42,6 +42,22 @@
   </div>
   <div id="note">真实的水蒸气是看不见的，这里画成白点方便观察。AI 辅助开发。</div>
 </section>
+
+<div id="fallback" hidden>
+  <div class="inner">
+    <div class="kicker"><span>WATER CYCLE</span><span>02</span></div>
+    <h1 class="display">水去哪儿了？</h1>
+    <img src="./fallback.webp" alt="水循环展台：山、河、湖和天上的云" />
+    <p id="fallbackMsg"></p>
+    <button id="fallbackReload" class="block dark" hidden>重新打开</button>
+    <ol>
+      <li><b>1</b><span><strong>蒸发</strong>：太阳把湖面晒热，一部分水变成看不见的水蒸气，飘上天。</span></li>
+      <li><b>2</b><span><strong>凝结</strong>：水蒸气升到高处遇冷，变回很多小水滴，聚在一起就是云。</span></li>
+      <li><b>3</b><span><strong>降水</strong>：云里的小水滴越聚越多、越来越重，就落下来变成雨。</span></li>
+      <li><b>4</b><span><strong>汇流</strong>：雨水顺着山坡汇成小河，流回湖里，水又开始下一圈。</span></li>
+    </ol>
+  </div>
+</div>
 
 <script type="module" src="./src/main.ts"></script>
 </body>

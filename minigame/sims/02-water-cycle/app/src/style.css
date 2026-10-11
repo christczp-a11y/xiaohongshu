@@ -20,7 +20,7 @@
   --bar: rgba(43, 44, 48, .1);
   --display: 'LabSans', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', sans-serif;
   --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-  --xhs-nav: 0px;        /* set by html.in-xhs: room for the 小红书 container's floating back / share buttons */
+  --xhs-nav: 40px;       /* room for the 小红书 container's floating back / avatar / share buttons */
   --safe-t: var(--xhs-nav);
   --safe-b: 0px;
   color-scheme: light;
@@ -38,7 +38,6 @@ body.night { --head: #f5f5f4; --head-2: #a1a1a6; }
 html, body { height: 100%; overflow: hidden; }
 html { touch-action: manipulation; }
 [hidden] { display: none !important; }
-html.in-xhs { --xhs-nav: 40px; }
 
 body {
   background: #f5f5f4;            /* the script fades this to dark grey at night */
@@ -154,3 +153,6 @@ canvas { display: block; touch-action: none; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* build stamp, so a phone screenshot shows which package is running */
+#build { position: fixed; right: 6px; bottom: 2px; padding: 2px 5px; border-radius: 4px; background: rgba(255, 255, 255, .8); font: 9px/1 -apple-system, sans-serif; color: rgba(0, 0, 0, .45); pointer-events: none; z-index: 5; }

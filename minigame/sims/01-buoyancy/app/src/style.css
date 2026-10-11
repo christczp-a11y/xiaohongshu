@@ -26,15 +26,14 @@
     sans-serif;
   --grot: 'Helvetica Neue', Helvetica, Arial, var(--sans);
   --display: 'LabSans', var(--sans);
-  --xhs-nav: 40px;       /* room for the 小红书 container's floating back / avatar / share buttons */
-  --safe-t: var(--xhs-nav);
+  --safe-t: 0px;
   --safe-b: 0px;
   color-scheme: light;
 }
 /* safe areas: the PC simulator injects --safe-area-inset-*, phones report env(); Chrome 61 knows neither */
 @supports (top: env(safe-area-inset-top)) {
   :root {
-    --safe-t: calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + var(--xhs-nav));
+    --safe-t: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
     --safe-b: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   }
 }
@@ -61,27 +60,33 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .key.on, .key.primary { background: var(--dark); color: #fff; --edge: var(--dark-edge); --rim: transparent; }
 .key:disabled { background: var(--well); color: var(--ink-3); --edge: var(--well-edge); --rim: transparent; cursor: default; }
 
-/* --- header -------------------------------------------------------------------------------- */
-.top { position: absolute; top: calc(var(--safe-t) + 14px); left: 18px; right: 16px;
-  display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; }
-.top > * { pointer-events: auto; }
+/* --- header: one row in the band beside the 小红书 container's floating buttons -----------------
+   the container draws its back key at the left of that band and avatar / share at the right, so the
+   title starts after the back key and nothing of ours sits under the right-hand keys; the scene
+   starts right below instead of 40px lower (Chris, 2026-10-11) */
+.top { position: absolute; top: calc(var(--safe-t) + 5px); left: 56px; right: 100px; height: 32px;
+  display: flex; align-items: baseline; white-space: nowrap; overflow: hidden; pointer-events: none; }
+.top .title { margin: 0; font-size: 30px; line-height: 32px; }
+.top .kicker { display: inline; margin-left: 12px; padding: 0; border: 0; color: var(--ink-2); }
+@media (max-width: 399px) { .top .kicker { display: none; } }
+#aboutBtn { position: absolute; top: calc(var(--safe-t) + 46px); right: 14px; }
 .brand { display: inline-flex; flex-direction: column; }
 .kicker { display: flex; justify-content: space-between; padding-bottom: 5px; border-bottom: 2px solid var(--ink);
   font-family: var(--grot); font-size: 10px; font-weight: 700; letter-spacing: 0.22em; color: var(--ink); }
 .kicker span + span { margin-left: 16px; }
 .title { margin-top: 6px; font-family: var(--display); font-weight: 900; font-size: 44px; line-height: 0.98;
   letter-spacing: -0.01em; }
-.round { width: 40px; height: 40px; border-radius: 13px; font-family: var(--display); font-weight: 900; font-size: 20px; }
+.round { width: 42px; height: 42px; border-radius: 13px; font-family: var(--display); font-weight: 900; font-size: 20px; }
 
 /* --- mode tabs ----------------------------------------------------------------------------- */
-.tabs { position: absolute; top: calc(var(--safe-t) + 92px); left: 14px; right: 14px;
+.tabs { position: absolute; top: calc(var(--safe-t) + 46px); left: 14px; right: 64px;
   display: grid; grid-template-columns: 1fr 1fr 1fr; grid-gap: 8px; }
 .tabs button { height: 42px; border-radius: 13px; font-family: var(--display); font-weight: 700; font-size: 16px;
   display: flex; align-items: center; justify-content: center; }
 .tabs small { margin-right: 6px; font-family: var(--grot); font-size: 10px; font-weight: 700; letter-spacing: 0.5px; opacity: 0.45; }
 
 /* --- the WebGL close-up is drawn under this frame -------------------------------------------- */
-.inset { position: absolute; right: 14px; top: calc(var(--safe-t) + 154px); width: 108px; height: 144px;
+.inset { position: absolute; right: 14px; top: calc(var(--safe-t) + 98px); width: 108px; height: 144px;
   border: 4px solid #fff; border-radius: 13px; pointer-events: none;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 5px 0 var(--key-edge), 0 16px 28px rgba(0, 0, 0, 0.12); }
 .inset figcaption { position: absolute; left: 50%; bottom: -15px; transform: translateX(-50%); white-space: nowrap;
@@ -191,7 +196,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 /* --- still picture and key ideas, when 3D can't run ----------------------------------------------- */
 #fallback { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 10; overflow-y: auto;
   -webkit-overflow-scrolling: touch; background: #f2f2f4;
-  padding: calc(var(--safe-t) + 24px) 20px calc(var(--safe-b) + 24px); }
+  padding: calc(var(--safe-t) + 60px) 20px calc(var(--safe-b) + 24px); }
 #fallback .inner { max-width: 480px; margin: 0 auto; }
 #fallback img { display: block; width: 100%; border-radius: 22px; margin: 18px 0 14px; background: #e4e4e8; }
 #fallbackMsg { font-size: 14px; line-height: 1.6; color: var(--ink-2); }
@@ -208,6 +213,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   .card { border-radius: 22px; padding-bottom: 10px;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 6px 0 var(--well-edge), 0 24px 44px rgba(0, 0, 0, 0.12); }
   .tabs { right: auto; width: 380px; }
+  #aboutBtn { right: auto; left: 402px; }
   .inset { right: 392px; top: auto; bottom: 26px; }
   .chip { left: 14px; bottom: 26px; top: auto !important; }
 }

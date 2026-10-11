@@ -42,6 +42,19 @@
 - **网页版不能拿去上传。** 它的脚本是内联 module，小工具容器不执行。上传只用 `npm run minitool` 打出的 zip。
 - **Chris 电脑上开着本地预览服务器时，输出目录会被锁住**，`npm run minitool` 会静默失败。打包前先关服务器，再核对 zip 里的版本号。
 
+## 每集的目录和命名
+```
+minigame/sims/NN-英文名/          NN 是两位编号，英文名小写加连字符，比如 02-water-cycle
+  design.md                      学习目标、怎么玩、简化、数值和出处
+  英文名.html                     网页版（npm run build 的 dist/index.html 拷过来）
+  release/英文名.zip              小工具包（npm run minitool 的产物，改名拷过来）
+  release/icon.png               1024×1024 图标
+  release/上传信息.md              名称、简介（各 ≤ 14 字）、场景标签、权限、验证三项
+  app/                           代码：index.html、src/、scripts/、fallback.webp、vite.config.ts
+```
+- 网页和 zip 用目录里的英文名（02 是 `water-cycle.html`、`water-cycle.zip`）。01 的文件叫 `buoyancy-lab`、目录叫 `01-buoyancy`，是早期留下的，不用改。01 的图标只在共享目录的 `release/` 里，仓库里还没有它的 `icon.png` 和 `上传信息.md`。
+- 网址开关照 01 留着：`?mode=` 直接打开某个页签，`?pose=` 摆好姿势，`?still` 隐藏界面截静态图，`?stats` 显示 draw call 和三角形，`?tier=` 固定画质档。兜底静态图和宣传视频都靠它们。
+
 ## 做一个新模拟
 1. 定知识点，写 `sims/NN-英文名/design.md`：学习目标、怎么玩、做了哪些简化、用到的数值和出处。数值要核对，不凭记忆写。
 2. 复制起点 app，换场景和逻辑，界面骨架不动。
@@ -50,7 +63,7 @@
 5. 按官方 skill 的清单过一遍，审计脚本对 `dist-minitool` 和 zip 各跑一次。
 6. 网页版拷成 `sims/NN-英文名/英文名.html`，zip 拷进 `sims/NN-英文名/release/`，推 git。给 Chris 的 zip 文件名带版本时间，比如 `buoyancy-lab-1010-1933.zip`，放进 `/mnt/project-files/minigame/sims/NN-英文名/release/`；旧包删掉，只留一个。同目录放 `icon.png`（1024×1024）、名称和简介（各 ≤ 14 字）。
 7. 交给 Chris 时说「浏览器里验过，真机待你确认」，附版本号。他在创服平台模拟器、安卓、iPhone 各扫一次，手动发布，发笔记时勾 AI 内容声明。
-8. 运营按「Day N」出视频、图文、文案和标签。宣传视频和图文卡在 Chris 电脑的 `C:\Users\Chris\xhs\promo\`，流程见那里的 README；运营线程的计划和文案在分支 `claude/project-thread-pyoib8` 的 `minigame/ops/` 和共享目录 `/mnt/project-files/minigame/ops/`。
+8. 交接运营：新一集合进 main 就算交付，运营线程从 git 看到新一集，先玩一遍再动手。Chris 在运营线程说「Day N」，它一次出齐视频、图文、文案和标签，图上的数字要从模拟里实际读出来。宣传视频和图文卡在 Chris 电脑的 `C:\Users\Chris\xhs\promo\`，流程见那里的 README；运营线程的计划和文案在分支 `claude/project-thread-pyoib8` 的 `minigame/ops/` 和共享目录 `/mnt/project-files/minigame/ops/`。
 
 ## 和 Chris 协作（10-10、10-11 踩过的坑）
 - 没在他手机上看到之前，不说「修好了」。

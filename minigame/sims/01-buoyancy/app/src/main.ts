@@ -297,7 +297,8 @@ function run(view: SceneView) {
       g.textBaseline = 'bottom';
       g.fillText('刚好浸没', x(a) + 4, H - B - 2);
       // explored curves, older liquids in grey
-      const order = [...curves.keys()].sort((p) => (p === liq ? 1 : -1));
+      // older liquids first, the current one last so it is drawn on top
+      const order = [...curves.keys()].filter((k) => k !== liq).concat(curves.has(liq) ? [liq] : []);
       for (const id of order) {
         const bins = [...curves.get(id)!.entries()].sort((p, q) => p[0] - q[0]);
         if (bins.length < 2) continue;
@@ -305,12 +306,8 @@ function run(view: SceneView) {
         g.strokeStyle = on ? '#0071e3' : '#b8b8bd';
         g.lineWidth = on ? 2 : 1.5;
         g.beginPath();
-        let prev = -9;
-        for (const [b, f] of bins) {
-          if (b - prev > 3) g.moveTo(x(b / 10), y(f));
-          else g.lineTo(x(b / 10), y(f));
-          prev = b;
-        }
+        // one continuous line through every recorded depth: no pen lifts, so it can never turn dashed
+        bins.forEach(([b, f], i) => (i === 0 ? g.moveTo(x(b / 10), y(f)) : g.lineTo(x(b / 10), y(f))));
         g.stroke();
         const [lb, lf] = bins[bins.length - 1];
         if (lb / 10 > a + 1) {
@@ -627,8 +624,12 @@ function run(view: SceneView) {
       view.setInset({ x: r.left + b, y: r.top + b, w: r.width - 2 * b, h: r.height - 2 * b });
     }
     // portrait: one row above the 受力分析 chip so the two never overlap
-    hint.style.bottom = landscape.matches ? '24px' : `${H - d.top + 14 + chip.offsetHeight + 12}px`;
-    chip.style.top = landscape.matches ? '' : `${d.top - chip.offsetHeight - 14}px`;
+    // the chip is anchored by its bottom edge: on iPhone its own height can still read 0 at the first
+    // layout, and placing it by its top then put it behind the panel
+    const chipH = chip.offsetHeight || 36;
+    hint.style.bottom = landscape.matches ? '24px' : `${H - d.top + 14 + chipH + 12}px`;
+    chip.style.top = '';
+    chip.style.bottom = landscape.matches ? '' : `${H - d.top + 14}px`;
   }
   window.addEventListener('resize', layout);
   setMode(mode);
@@ -721,7 +722,7 @@ function run(view: SceneView) {
     view.render();
     // the panel can grow after the first layout (fonts, step text): keep the 受力分析 chip and hint above it
     if (++layoutCheck % 15 === 0) {
-      const key = `${dock.offsetTop}|${dock.offsetHeight}|${tabs.offsetTop + tabs.offsetHeight}`;
+      const key = `${dock.offsetTop}|${dock.offsetHeight}|${tabs.offsetTop + tabs.offsetHeight}|${chip.offsetHeight}`;
       if (key !== layoutKey) { layoutKey = key; layout(); }
     }
     const a = view.anchors();

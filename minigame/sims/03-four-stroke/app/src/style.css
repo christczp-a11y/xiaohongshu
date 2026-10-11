@@ -76,6 +76,15 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .title { margin-top: 6px; font-family: var(--display); font-weight: 900; font-size: 44px; line-height: 0.98;
   letter-spacing: -0.01em; }
 .round { width: 42px; height: 42px; border-radius: 13px; font-family: var(--display); font-weight: 900; font-size: 20px; }
+#aboutBtn { position: absolute; top: calc(var(--safe-t) + 46px); right: 14px; }
+
+/* --- the three pages, as the buoyancy lab's tabs; ? sits at the end of the row ------------------------- */
+.tabs { position: absolute; top: calc(var(--safe-t) + 46px); left: 14px; right: 64px;
+  display: grid; grid-template-columns: 1fr 1fr 1fr; grid-gap: 8px; }
+.tabs button { height: 42px; border-radius: 13px; font-family: var(--display); font-weight: 700; font-size: 16px;
+  display: flex; align-items: center; justify-content: center; white-space: nowrap; }
+.tabs small { margin-right: 6px; font-family: var(--grot); font-size: 10px; font-weight: 700; letter-spacing: 0.5px; opacity: 0.45; }
+@media (max-width: 399px) { .tabs small { margin-right: 4px; } .tabs button { font-size: 15px; } }
 
 /* --- labels pinned to the 3D scene ------------------------------------------------------------ */
 .tag { position: absolute; left: 0; top: 0; font-family: var(--grot); font-size: 12px; font-weight: 700; padding: 3px 8px;
@@ -154,11 +163,26 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .strokes button { height: 34px; font-size: 15px; }
 .strokes small { margin-right: 4px; font-family: var(--grot); font-size: 10px; font-weight: 700; opacity: 0.45; }
 
-/* ?, the energy line and the start key share the last row */
+/* the energy line (or the engine pick) and the start key share the last row */
 .actions { display: flex; align-items: center; margin-top: 10px; }
 .actions > * + * { margin-left: 8px; }
-.actions .round { flex: none; height: 42px; }
-.actions .eq { flex: 1; }
+.actions .eq, .actions .kinds { flex: 1; }
+.kinds button { height: 42px; border-radius: 13px; font-size: 16px; --depth: 4px; }
+
+/* where the fuel's energy goes: one bar cut in proportion, the useful part dark */
+.flow { display: flex; height: 36px; margin-top: 8px; border-radius: 12px; overflow: hidden;
+  box-shadow: 0 3px 0 var(--key-edge); transition: transform 0.15s; }
+.flow .part { min-width: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 7px;
+  white-space: nowrap; overflow: hidden; transition: flex-grow 0.4s; }
+.flow .part + .part { box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.7); }
+.flow span { font-size: 10.5px; font-weight: 700; line-height: 1.2; opacity: 0.75; }
+.flow b { font-family: var(--grot); font-size: 16px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.flow .work { background: var(--dark); color: #fff; }
+.flow .exhaust { background: #9a9aa1; color: #fff; }
+.flow .cooling { background: #c4c4ca; color: var(--ink); }
+.flow .friction { background: #e2e2e7; color: var(--ink); padding: 0 4px; }
+.flow.pulse { transform: scale(1.02); }
+@media (max-width: 399px) { .flow .part { padding: 0 5px; } .flow b { font-size: 14px; } .flow .friction { min-width: 36px; padding: 0 3px; } }
 .actions .btn { flex: none; width: 104px; }
 .btn { height: 42px; border-radius: 14px; font-family: var(--display); font-weight: 700; font-size: 16px; --depth: 5px; }
 .btn:not(.primary):not(:disabled) { background: var(--well); --edge: var(--key-edge); --rim: transparent; }
@@ -207,4 +231,4 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 #build { position: fixed; right: 6px; bottom: 2px; padding: 2px 5px; border-radius: 4px; background: rgba(255, 255, 255, .8); font: 9px/1 -apple-system, sans-serif; color: rgba(0, 0, 0, .45); pointer-events: none; z-index: 5; }
 
 /* ?still: the bare scene, for the fallback picture */
-.still .top, .still .tag, .still .chip, .still .dock, .still #build { display: none !important; }
+.still .top, .still .tabs, .still #aboutBtn, .still .tag, .still .chip, .still .dock, .still #build { display: none !important; }

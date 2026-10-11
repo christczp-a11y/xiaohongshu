@@ -32,6 +32,8 @@ const BUCKET_AT = 7.2; // along the valve axis from the seat
 const CAM_BASE = 0.95;
 const CAM_AT = BUCKET_AT + 0.8 + CAM_BASE;
 const PLUG_TIP = DECK + 1.45;
+/** Turns a geometry's y axis onto x (pipes lying along the engine). */
+const xAxisQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
 
 const TABLE = { x0: -27, x1: 27, z0: -19, z1: 12, t: 2.4, leg: 0.9 };
 const FLOOR_Y = -74;
@@ -64,13 +66,15 @@ export interface SceneFrame {
   burnt: boolean;
   sparkAge: number; // seconds since the plug last fired
   time: number;
+  kind: E.Kind;
 }
 
 export interface Anchors {
   intake: THREE.Vector3;
   exhaust: THREE.Vector3;
-  plug: THREE.Vector3;
+  plug: THREE.Vector3; // the spark plug, or the diesel's injector
   piston: THREE.Vector3;
+  fins: THREE.Vector3; // cooling fins on the barrel, where heat leaves
   crank: THREE.Vector3;
   flywheel: THREE.Vector3;
 }
@@ -461,10 +465,48 @@ export function createScene(canvas: HTMLCanvasElement, onFail: () => void): Scen
     plug.add(insulator, new THREE.Mesh(merge([tip, term]), steel));
   }
 
+  // --- the diesel's injector, in the plug's place: a nozzle into the chamber and a fuel line on top ------------
+  const injector = new THREE.Group();
+  injector.position.copy(plug.position);
+  injector.visible = false;
+  scene.add(injector);
+  {
+    const below = HEAD_H - 1.45; // from the nozzle up to the top of the head
+    const nozzle = new THREE.CylinderGeometry(0.3, 0.14, 0.5, 16);
+    nozzle.translate(0, -0.05, 0);
+    const body = new THREE.CylinderGeometry(0.5, 0.5, below, 24);
+    body.translate(0, below / 2, 0);
+    const upper = new THREE.CylinderGeometry(0.78, 0.78, 3.2, 32);
+    upper.translate(0, below + 2.0, 0);
+    injector.add(new THREE.Mesh(merge([nozzle, body, upper]), steel));
+    const clamp = new THREE.CylinderGeometry(1.05, 1.05, 0.9, 6);
+    clamp.translate(0, below + 0.45, 0);
+    const cap = new THREE.CylinderGeometry(0.5, 0.62, 0.6, 24);
+    cap.translate(0, below + 3.9, 0);
+    const banjo = at(new THREE.CylinderGeometry(0.34, 0.34, 1.5, 20), 0.95, below + 3.0, 0, xAxisQ);
+    injector.add(new THREE.Mesh(merge([clamp, cap, banjo]), chrome));
+    const band = new THREE.CylinderGeometry(0.82, 0.82, 0.5, 32);
+    band.translate(0, below + 1.3, 0);
+    injector.add(new THREE.Mesh(band, blackMat));
+    // the high-pressure fuel line runs back behind the head
+    const line = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(1.6, below + 3.0, 0),
+      new THREE.Vector3(2.6, below + 3.3, -0.8),
+      new THREE.Vector3(3.0, below + 4.2, -3.2),
+      new THREE.Vector3(3.0, below + 4.6, -7.0),
+    ]);
+    injector.add(new THREE.Mesh(new THREE.TubeGeometry(line, 24, 0.2, 10), steel));
+    injector.traverse((o) => (o.castShadow = true));
+  }
+
   // --- intake: manifold, carburettor, air filter; exhaust: header and silencer ---------------------------------
   const pipes = new THREE.Group();
   scene.add(pipes);
-  const xAxis = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+  // petrol: the carburettor mixes fuel into the air; a diesel draws plain air through a bare pipe
+  const carb = new THREE.Mesh(new RoundedBoxGeometry(2.6, 3.4, 3.2, 2, 0.4), blackMat);
+  const airPipe = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.25, 2.7, 32), chrome);
+  airPipe.visible = false;
+  const xAxis = xAxisQ;
   {
     const polished = new THREE.Mesh(
       merge([
@@ -473,8 +515,9 @@ export function createScene(canvas: HTMLCanvasElement, onFail: () => void): Scen
       ]),
       chrome,
     );
-    const carb = new THREE.Mesh(new RoundedBoxGeometry(2.6, 3.4, 3.2, 2, 0.4), blackMat);
     carb.position.set(-12.9, PORT_Y, -1.5);
+    airPipe.position.set(-12.9, PORT_Y, -1.5);
+    airPipe.quaternion.copy(xAxis);
     const filter = new THREE.Mesh(
       merge([
         at(new THREE.CylinderGeometry(3.1, 3.1, 4.0, 48), -16.2, PORT_Y + 0.4, -1.5, xAxis),
@@ -508,7 +551,7 @@ export function createScene(canvas: HTMLCanvasElement, onFail: () => void): Scen
       at(new THREE.CylinderGeometry(0.55, 0.55, 2.6, 20), 18.4, PORT_Y + 0.55, -1.5, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2 - 0.35)),
       steel,
     );
-    for (const m of [polished, carb, filter, filterLid, header, muffler, tail]) {
+    for (const m of [polished, carb, airPipe, filter, filterLid, header, muffler, tail]) {
       m.castShadow = true;
       m.receiveShadow = true;
       pipes.add(m);
@@ -562,6 +605,7 @@ export function createScene(canvas: HTMLCanvasElement, onFail: () => void): Scen
     exhaust: new THREE.Vector3(10.4, PORT_Y + 1.6, -1.5),
     plug: new THREE.Vector3(0, D + HEAD_H + 6.6, 0),
     piston: new THREE.Vector3(-8.6, 0, 0),
+    fins: new THREE.Vector3(-8.8, (CASE_TOP + DECK) / 2, 0),
     crank: new THREE.Vector3(-RO - 0.4, YC, 0),
     flywheel: new THREE.Vector3(11.4, YC - 6, FLY_Z),
   };
@@ -571,6 +615,12 @@ export function createScene(canvas: HTMLCanvasElement, onFail: () => void): Scen
 
   function update(f: SceneFrame) {
     const th = f.theta;
+    const diesel = f.kind === 'diesel';
+    plug.visible = !diesel;
+    injector.visible = diesel;
+    carb.visible = !diesel;
+    airPipe.visible = diesel;
+    anchors.plug.y = D + HEAD_H + (diesel ? 4.9 : 6.6);
     const a = THREE.MathUtils.degToRad(th);
     const pinY = YC + E.pinHeight(th);
     piston.position.set(0, pinY, 0);
@@ -597,9 +647,9 @@ export function createScene(canvas: HTMLCanvasElement, onFail: () => void): Scen
     const crown = pinY + PIN_UP;
     const dt = lastTime < 0 ? 0 : Math.max(0, f.time - lastTime);
     lastTime = f.time;
-    const look = gasLook(c, f.burnt);
+    const look = gasLook(c, f.burnt, f.kind);
     gas.set(crown, D, look, f.time, E.burnFraction(th, f.burnt));
-    specks.update(c, crown, f.burnt, f.time);
+    specks.update(c, crown, f.burnt, f.time, diesel);
     fire.intensity = look.heat * 30;
 
     // a puff from the silencer for every bit of exhaust pushed out
@@ -608,9 +658,9 @@ export function createScene(canvas: HTMLCanvasElement, onFail: () => void): Scen
     if (c >= 540 && moved > 0 && moved < 200) puffs.emit(moved, tailOut, f.burnt || c > 540);
     puffs.step(dt);
 
-    // the spark: a short blue-white flash between the electrodes
+    // the spark: a short blue-white flash between the electrodes (a diesel has none: it lights itself)
     const s = f.sparkAge;
-    const on = s >= 0 && s < 0.22;
+    const on = !diesel && s >= 0 && s < 0.22;
     const flick = on ? (1 - s / 0.22) * (0.75 + 0.25 * Math.sin(f.time * 90)) : 0;
     spark.scale.setScalar(0.01 + flick * 3.2);
     spark.material.opacity = flick;
@@ -678,23 +728,28 @@ export interface GasLook {
 const C = (h: string) => new THREE.Color(h);
 const MIX = C('#a8d4e6');
 const WARM = C('#f0b48a');
+const AIR = C('#d3e8f0'); // a diesel draws in plain air: paler than the petrol mixture
+const HOT_AIR = C('#f39a5c'); // and squeezes it harder, until it is hot enough to light the fuel
 const HOT = C('#ffd166');
 const RED = C('#e0592a');
 const SMOKE = C('#6c6560');
 
-export function gasLook(c: number, burnt: boolean): GasLook {
+export function gasLook(c: number, burnt: boolean, kind: E.Kind = 'petrol'): GasLook {
   const s = (a: number, b: number, x: number) => THREE.MathUtils.smoothstep(x, a, b);
   const color = new THREE.Color();
   const flame = new THREE.Color();
+  const diesel = kind === 'diesel';
+  const fresh = diesel ? AIR : MIX;
+  const base = diesel ? 0.24 : 0.32;
   let alpha = 0;
   let heat = 0;
   if (c < 180) {
-    color.copy(MIX);
-    alpha = 0.32 * s(0, 150, c);
+    color.copy(fresh);
+    alpha = base * s(0, 150, c);
   } else if (c < 360) {
     const k = s(180, 360, c);
-    color.copy(MIX).lerp(WARM, k * k * 0.85);
-    alpha = 0.32 + 0.16 * k;
+    color.copy(fresh).lerp(diesel ? HOT_AIR : WARM, k * k * (diesel ? 1 : 0.85));
+    alpha = base + (diesel ? 0.28 : 0.16) * k;
   } else if (c < 540) {
     if (burnt) {
       const cool = s(385, 540, c);
@@ -703,12 +758,12 @@ export function gasLook(c: number, burnt: boolean): GasLook {
       heat = c < 385 ? 1 : 1 - cool * 0.9;
     } else {
       const k = s(360, 540, c);
-      color.copy(WARM).lerp(MIX, k);
-      alpha = 0.48 - 0.16 * k;
+      color.copy(diesel ? HOT_AIR : WARM).lerp(fresh, k);
+      alpha = base + (diesel ? 0.28 : 0.16) * (1 - k);
     }
   } else {
-    color.copy(burnt ? SMOKE : MIX);
-    alpha = (burnt ? 0.46 : 0.32) * (1 - 0.7 * s(560, 715, c));
+    color.copy(burnt ? SMOKE : fresh);
+    alpha = (burnt ? 0.46 : base) * (1 - 0.7 * s(560, 715, c));
   }
   if (burnt && c >= E.SPARK_AT && c < 390) {
     flame.copy(HOT);
@@ -990,6 +1045,10 @@ function speckCloud(n: number) {
   const glow = C('#fff1b8');
   const ember = C('#ff7a2c');
   const soot = C('#4c4744');
+  const warmAir = C('#ffd0a0');
+  const hotAir = C('#ff9a5a');
+  const nozzle = new THREE.Vector3(0, PLUG_TIP - 0.35, -0.3);
+  const SPRAY = 16; // crank degrees for the spray to reach across the chamber
   let dense = true;
   const p = new THREE.Vector3();
   const along = (pts: THREE.Vector2[], u: number, out: THREE.Vector3) => {
@@ -1004,7 +1063,7 @@ function speckCloud(n: number) {
     setDense(on: boolean) {
       dense = on;
     },
-    update(c: number, crown: number, burnt: boolean, time: number) {
+    update(c: number, crown: number, burnt: boolean, time: number, diesel = false) {
       let shown = 0;
       const use = dense ? n : Math.floor(n * 0.6);
       for (let i = 0; i < use; i++) {
@@ -1047,11 +1106,20 @@ function speckCloud(n: number) {
           p.x = hx;
           p.y = hy;
         }
+        // a diesel draws in air only: its fuel specks are sprayed in from the injector at the end of
+        // compression, fanning out from the nozzle to their places, and are never there unburnt
+        if (diesel && s.fuel) {
+          if (!burnt || c < E.SPARK_AT) visible = false;
+          else if (c < E.SPARK_AT + SPRAY) {
+            const u = 1 - (1 - (c - E.SPARK_AT) / SPRAY) ** 2;
+            p.set(nozzle.x + (hx - nozzle.x) * u, nozzle.y + (hy - nozzle.y) * u, nozzle.z + (s.z - nozzle.z) * u);
+          }
+        }
         if (!visible) continue;
         // colour: the charge, warmed by squeezing; glowing where the flame has been; then soot
         if (!burnt || c < E.SPARK_AT) {
           col.copy(s.fuel ? fuel : air);
-          if (c >= 180 && c < 540) col.lerp(C('#ffd0a0'), 0.45 * Math.sin(Math.min(1, (c - 180) / 180) * Math.PI * 0.5));
+          if (c >= 180 && c < 540) col.lerp(diesel ? hotAir : warmAir, (diesel ? 0.8 : 0.45) * Math.sin(Math.min(1, (c - 180) / 180) * Math.PI * 0.5));
         } else {
           const reach = 0.4 + E.burnFraction(c, true) * 9;
           const d = Math.hypot(p.x, p.y - (PLUG_TIP - 0.4), p.z);

@@ -3,17 +3,24 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>四冲程汽油机</title>
+<title>四冲程内燃机</title>
 <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
-<main id="app">
+<main id="app" data-mode="petrol">
   <canvas id="c"></canvas>
 
   <header class="top">
-    <h1 class="title">四冲程汽油机</h1>
+    <h1 class="title">四冲程内燃机</h1>
     <span class="kicker">4-STROKE</span>
   </header>
+  <button class="round key" id="aboutBtn" aria-label="关于">?</button>
+
+  <nav class="tabs" id="tabs" role="tablist">
+    <button class="key on" role="tab" data-mode="petrol" aria-selected="true"><small>01</small>汽油机</button>
+    <button class="key" role="tab" data-mode="diesel" aria-selected="false"><small>02</small>柴油机</button>
+    <button class="key" role="tab" data-mode="energy" aria-selected="false"><small>03</small>能量去向</button>
+  </nav>
 
   <div class="tag" id="tagIntake">进气门</div>
   <div class="tag" id="tagExhaust">排气门</div>
@@ -27,7 +34,9 @@
   <section class="dock" id="dock">
     <div class="card">
       <div class="hint" id="hint"><span class="hand">↻</span><span>顺时针转飞轮，用力甩一下</span></div>
-      <div class="panel">
+
+      <!-- 汽油机 / 柴油机: the same engine, plug or injector -->
+      <div class="panel" data-for="engine">
         <div class="guide"><b class="step" id="stepNo">1</b><span id="stepText">进气门打开，活塞向下，吸进汽油和空气</span><button class="key redo" id="reset">重来</button></div>
         <div class="seg strokes" id="strokes">
           <button class="key on" data-k="0"><small>1</small>吸气</button>
@@ -41,11 +50,35 @@
           <div class="m"><span class="k">曲轴圈数</span><b id="vTurns">0.0</b></div>
           <div class="m"><span class="k">做功次数</span><b id="vPowers">0</b></div>
         </div>
-        <div class="formula">1 个工作循环：4 个冲程，曲轴转 2 圈，活塞往复 2 次，做功 1 次</div>
+        <div class="formula" id="formula">1 个工作循环：4 个冲程，曲轴转 2 圈，活塞往复 2 次，做功 1 次</div>
         <div class="actions">
-          <button class="round key" id="aboutBtn" aria-label="关于">?</button>
           <div class="eq" id="energy"><span class="lbl">能量</span><b id="energyText">靠飞轮惯性</b></div>
-          <button class="btn key primary" id="startBtn">启动</button>
+          <button class="btn key primary start">启动</button>
+        </div>
+      </div>
+
+      <!-- 能量去向 -->
+      <div class="panel" data-for="energy" hidden>
+        <div class="guide"><i class="step dotted"></i><span id="flowText">燃料的能量，大部分都散失了</span><button class="key redo" id="flowReset">清零</button></div>
+        <div class="flow" id="flow">
+          <div class="part work" id="fWork"><span>有用的功</span><b>25%</b></div>
+          <div class="part exhaust" id="fExhaust"><span>废气带走</span><b>35%</b></div>
+          <div class="part cooling" id="fCooling"><span>散热</span><b>30%</b></div>
+          <div class="part friction" id="fFriction"><span>摩擦</span><b>10%</b></div>
+        </div>
+        <div class="meters">
+          <div class="m"><span class="k">做功次数</span><b id="ePowers">0</b></div>
+          <div class="m"><span class="k">燃料放出 Q放</span><b id="eFuel">0</b></div>
+          <div class="m"><span class="k">有用的功 W有用</span><b id="eWork">0</b></div>
+          <div class="m"><span class="k">效率 η</span><b id="eEff">—</b></div>
+        </div>
+        <div class="formula">η = W有用 ÷ Q放 × 100%　　每做功 1 次放出 100 份（示意）</div>
+        <div class="actions">
+          <div class="seg kinds" id="kinds">
+            <button class="key on" data-kind="petrol">汽油机</button>
+            <button class="key" data-kind="diesel">柴油机</button>
+          </div>
+          <button class="btn key primary start">启动</button>
         </div>
       </div>
     </div>
@@ -53,8 +86,9 @@
 
   <div class="sheet" id="about" hidden>
    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
-    <h3 id="aboutTitle">关于四冲程汽油机</h3>
-    <p>一台单缸汽油机，前面一半切掉了，能看到气缸里面。手指绕着曲轴转，就是转飞轮；点「启动」，它自己转起来；点「熄火」，火花塞不再点火，飞轮慢慢停下。点上面四个冲程按钮，可以直接停到那个冲程的开头。</p>
+    <h3 id="aboutTitle">关于四冲程内燃机</h3>
+    <p>一台单缸发动机，前面一半切掉了，能看到气缸里面。手指绕着曲轴转，就是转飞轮；点「启动」，它自己转起来；点「熄火」，飞轮慢慢停下。点四个冲程按钮，可以直接停到那个冲程的开头。</p>
+    <p><b>汽油机</b>：</p>
     <ul>
       <li>吸气：进气门开，活塞向下，汽油和空气的混合物进气缸。</li>
       <li>压缩：两个气门都关，活塞向上，混合物被压缩、温度升高，机械能转化为内能。</li>
@@ -62,8 +96,10 @@
       <li>排气：排气门开，活塞向上，把废气排出去。</li>
       <li>只有做功冲程对外做功，另外三个冲程靠飞轮的惯性完成。</li>
     </ul>
-    <p class="small">为了看得清，这里做了简化：转速放慢了很多，真实的汽油机转得快得多；尺寸不按比例；混合气、燃气和废气本来看不见，颜色和小点是画出来的；气门按课本说法只在自己的冲程里打开，真实发动机的气门和点火时刻会提前或推迟一些。</p>
-    <p class="small">AI 辅助开发。知识点按初中物理「热机」整理，未使用教材文字和插图。字体为 Noto Sans SC 的子集（SIL OFL 1.1）。</p>
+    <p><b>柴油机</b>：顶上是喷油嘴，没有火花塞。吸气冲程吸进的只有空气；压缩冲程把空气压得更厉害，温度更高；压缩冲程末尾喷油嘴喷出雾状柴油，遇到高温空气自己燃烧，这叫压燃式（汽油机是点燃式）。一般来说柴油机的效率比汽油机高。</p>
+    <p><b>能量去向</b>：燃料燃烧放出的能量，一部分被废气带走（最多），一部分散热散掉，一部分克服摩擦，剩下的才是有用的功。热机的效率 η = 有用的功 ÷ 燃料完全燃烧放出的能量。</p>
+    <p class="small">为了看得清，这里做了简化：转速放慢了很多，真实的发动机转得快得多；尺寸不按比例；混合气、空气、燃气和废气本来看不见，颜色和小点是画出来的；气门按课本说法只在自己的冲程里打开，真实发动机的气门、点火和喷油时刻会提前或推迟一些。能量去向里的百分比是示意，真实发动机因型号和工况不同而不同。</p>
+    <p class="small">AI 辅助开发。知识点按初中物理「热机」「热机的效率」整理，未使用教材文字和插图。字体为 Noto Sans SC 的子集（SIL OFL 1.1）。</p>
     <div class="sheet-actions"><button class="btn key primary" id="aboutClose">知道了</button></div>
    </div>
   </div>
@@ -74,9 +110,9 @@
   <div class="inner">
     <div class="brand">
       <div class="kicker"><span>FOUR-STROKE</span><span>02</span></div>
-      <h1 class="title">四冲程汽油机</h1>
+      <h1 class="title">四冲程内燃机</h1>
     </div>
-    <img src="./fallback.webp" alt="剖开的单缸汽油机，能看到活塞、气门和火花塞" />
+    <img src="./fallback.webp" alt="剖开的单缸发动机，能看到活塞、气门和火花塞" />
     <p id="fallbackMsg"></p>
     <button class="btn key primary" id="fallbackReload" hidden>重新打开</button>
     <ol>
@@ -85,6 +121,8 @@
       <li><b>3</b><span><strong>做功冲程</strong>：火花塞点火，燃气燃烧，推动活塞向下，内能转化为机械能。</span></li>
       <li><b>4</b><span><strong>排气冲程</strong>：排气门打开，活塞向上，把废气排出气缸。</span></li>
       <li><b>=</b><span>一个工作循环有 4 个冲程，曲轴转 2 圈，活塞往复 2 次，对外做功 1 次。另外三个冲程靠飞轮的惯性完成。</span></li>
+      <li><b>柴</b><span><strong>柴油机</strong>：顶上是喷油嘴；吸气冲程只吸进空气；压缩得更厉害，压缩冲程末喷油，柴油遇到高温空气自己燃烧（压燃式）。</span></li>
+      <li><b>η</b><span><strong>热机的效率</strong>：用来做有用功的能量 ÷ 燃料完全燃烧放出的能量。废气带走的能量最多，其余散热、克服摩擦。柴油机的效率一般比汽油机高。</span></li>
     </ol>
   </div>
 </div>

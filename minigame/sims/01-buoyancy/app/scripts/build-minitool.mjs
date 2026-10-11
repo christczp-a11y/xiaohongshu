@@ -6,6 +6,14 @@ import { build } from 'esbuild';
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { crc32, deflateRawSync } from 'node:zlib';
 
+// the stamp reads in Vancouver time wherever the package is built, so it matches the phone's clock
+function buildStamp() {
+  const p = {};
+  for (const x of new Intl.DateTimeFormat('en-US', { timeZone: 'America/Vancouver', month: 'numeric', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date())) p[x.type] = x.value;
+  return `${p.month}月${p.day}日 ${p.hour}:${p.minute}`;
+}
+
 const OUT = 'dist-minitool';
 const ZIP = 'buoyancy-lab-minitool.zip';
 const TARGET = ['es2017', 'chrome61'];
@@ -15,7 +23,7 @@ mkdirSync(OUT);
 
 await build({
   entryPoints: ['src/main.ts'], bundle: true, format: 'iife', target: TARGET,
-  define: { __BUILD__: JSON.stringify(((d) => `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`)(new Date())) },
+  define: { __BUILD__: JSON.stringify(buildStamp()) },
   minify: true, legalComments: 'eof', outfile: `${OUT}/main.js`, logLevel: 'warning',
 });
 // the font urls in style.css become fonts/<name>.woff2 next to it

@@ -260,7 +260,7 @@ function run(view: SceneView) {
       const H = chart.clientHeight;
       const L = 30;
       const R = 10;
-      const T = 8;
+      const T = 15; // the title sits above the 1N line
       const B = 18;
       const FMAX = 1.0;
       const x = (v: number) => L + (v / H_MAX) * (W - L - R);
@@ -284,6 +284,13 @@ function run(view: SceneView) {
       g.textBaseline = 'top';
       for (let v = 0; v <= H_MAX; v += 2) g.fillText(v === 0 ? 'h=0' : `${v}`, x(v), H - B + 5);
       g.fillText('cm', W - R, H - B + 5);
+      // the title sits top left, where no curve reaches (they all plateau under 1N on the right)
+      g.textAlign = 'left';
+      g.fillStyle = '#6e6e73';
+      g.font = `700 10px ${getComputedStyle(document.body).fontFamily}`;
+      g.fillText('F浮 随浸入深度 h 的变化', L + 2, 1);
+      g.font = `500 10px ${getComputedStyle(document.body).fontFamily}`;
+      g.fillStyle = '#8e8e93';
       // where the block is just fully under
       const a = DEFAULT_SETUP.cubeSide;
       g.strokeStyle = '#c7c7cc';
@@ -623,16 +630,11 @@ function run(view: SceneView) {
       const b = insetEl.clientLeft;
       view.setInset({ x: r.left + b, y: r.top + b, w: r.width - 2 * b, h: r.height - 2 * b });
     }
-    // portrait: one row above the 受力分析 chip so the two never overlap
-    // the chip is anchored by its bottom edge: on iPhone its own height can still read 0 at the first
-    // layout, and placing it by its top then put it behind the panel
-    // portrait: the hint shares the toggle's row (right side), so nothing floats over the apparatus
-    const chipH = chip.offsetHeight || 32, chipW = chip.offsetWidth || 110;
-    const rowBottom = H - d.top + 12;
+    // portrait: the 受力分析 chip sits just above the panel, anchored by its bottom edge (on iPhone its own
+    // height can still read 0 at the first layout, and placing it by its top then put it behind the panel);
+    // the hint is a row inside the panel, so it never covers the scene
     chip.style.top = '';
-    chip.style.bottom = landscape.matches ? '' : `${rowBottom}px`;
-    hint.style.bottom = landscape.matches ? '24px' : `${rowBottom + Math.max(0, (chipH - 30) / 2)}px`;
-    hint.style.maxWidth = landscape.matches ? '' : `${Math.max(120, W - 14 - chipW - 10 - 14)}px`;
+    chip.style.bottom = landscape.matches ? '' : `${H - d.top + 12}px`;
   }
   window.addEventListener('resize', layout);
   setMode(mode);

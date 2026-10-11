@@ -52,7 +52,7 @@ const G_CM = 980; // gravity, cm/s²
 
 /** What the camera keeps in frame, in cm: the stand and both glasses, or
  *  just the cup when there is no scale. */
-const RIG = { width: 46, height: 44, centerY: 16.5, centerX: -2 };
+const RIG = { width: 38, height: 44, centerY: 16.5, centerX: -3.5 }; // tight: the stand and beaker fill a phone's width
 const CUP_ONLY = { width: 24, height: 27, centerY: 9.5, centerX: CUP_X };
 
 /**

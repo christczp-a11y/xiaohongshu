@@ -20,7 +20,7 @@
   --bar: rgba(43, 44, 48, .1);
   --display: 'LabSans', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', sans-serif;
   --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-  --xhs-nav: 40px;       /* room for the 小红书 container's floating back / avatar / share buttons */
+  --xhs-nav: 0px;        /* no extra strip: the scene gets the room (Chris); keep tappable things out of the button corners */
   --safe-t: var(--xhs-nav);
   --safe-b: 0px;
   color-scheme: light;
@@ -83,7 +83,7 @@ canvas { display: block; touch-action: none; }
 #head h1 { font-size: 44px; line-height: .98; letter-spacing: -.01em; transition: color .6s; }
 
 /* --- readings: small label, big number, hairline bar --- */
-#meters { position: fixed; top: calc(var(--safe-t) + 18px); right: 16px; padding: 12px 14px 10px; width: 132px; }
+#meters { position: fixed; top: calc(var(--safe-t) + 50px);   /* clear of the container's avatar / share buttons */ right: 16px; padding: 12px 14px 10px; width: 132px; }
 .meter { display: grid; grid-template-columns: 1fr auto; align-items: baseline; grid-row-gap: 3px; }
 .meter + .meter { margin-top: 9px; }
 .meter .k { font-size: 11px; font-weight: 600; color: var(--ink-2); }

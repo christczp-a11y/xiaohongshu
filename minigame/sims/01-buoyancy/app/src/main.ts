@@ -23,6 +23,13 @@ const H_MAX = DEFAULT_SETUP.spoutHeight - MIN_BOTTOM; // deepest the cube can go
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const params = new URLSearchParams(location.search);
+declare const __BUILD__: string;
+{
+  const el = document.createElement('div');
+  el.id = 'build';
+  el.textContent = __BUILD__;
+  document.body.appendChild(el);
+}
 const pose = params.get('pose');
 
 const canvas = $<HTMLCanvasElement>('c');

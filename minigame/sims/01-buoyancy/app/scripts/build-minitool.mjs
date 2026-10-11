@@ -5,16 +5,19 @@
 import { build } from 'esbuild';
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { crc32, deflateRawSync } from 'node:zlib';
+import { buildStamp } from './stamp.mjs';
 
 const OUT = 'dist-minitool';
 const ZIP = 'buoyancy-lab.zip';
 const TARGET = ['es2017', 'chrome61'];
+const stamp = buildStamp();
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT);
 
 await build({
   entryPoints: ['src/main.ts'], bundle: true, format: 'iife', target: TARGET,
+  define: { __BUILD__: JSON.stringify(stamp) },
   minify: true, legalComments: 'eof', outfile: `${OUT}/main.js`, logLevel: 'warning',
 });
 // the font urls in style.css become fonts/<name>.woff2 next to it
@@ -24,13 +27,8 @@ await build({
   outfile: `${OUT}/style.css`, logLevel: 'warning',
 });
 
-// the version on the page is how Chris tells which package the phone is running; it must match
-// the 版本号 typed into the platform, so it comes from package.json and is checked here
-const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
 let html = readFileSync('index.html', 'utf8');
-if (!html.includes(`v${version}<`)) throw new Error(`index.html: page should show v${version}`);
 const swaps = [
-  ['<html lang="zh-CN">', '<html lang="zh-CN" class="minitool">'],
   ['<link rel="stylesheet" href="./src/style.css" />', '<link rel="stylesheet" href="./style.css" />'],
   ['<script type="module" src="./src/main.ts"></script>', '<script src="./main.js"></script>'],
 ];
@@ -79,4 +77,4 @@ end.writeUInt32LE(cenBuf.length, 12); end.writeUInt32LE(offset, 16);
 writeFileSync(ZIP, Buffer.concat([...local, cenBuf, end]));
 
 for (const f of files) console.log(`${OUT}/${f}  ${statSync(`${OUT}/${f}`).size} bytes`);
-console.log(`${ZIP}  ${statSync(ZIP).size} bytes  (v${version})`);
+console.log(`${ZIP}  ${statSync(ZIP).size} bytes  (${stamp})`);

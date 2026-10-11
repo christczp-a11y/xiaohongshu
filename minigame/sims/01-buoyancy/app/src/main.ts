@@ -23,6 +23,10 @@ const H_MAX = DEFAULT_SETUP.spoutHeight - MIN_BOTTOM; // deepest the cube can go
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const params = new URLSearchParams(location.search);
+// inside the 小红书 container its back / share buttons float over the top corners: leave them room
+const markContainer = () => { if ((window as unknown as { xhs?: unknown }).xhs) document.documentElement.classList.add('in-xhs'); };
+markContainer();
+setTimeout(markContainer, 600);
 const pose = params.get('pose');
 
 const canvas = $<HTMLCanvasElement>('c');
@@ -688,6 +692,7 @@ function run(view: SceneView) {
     showFallback('画面暂停了。点下面的按钮重新打开。', true);
   });
 
+  let layoutCheck = 0, layoutKey = '';
   function frame(now: number) {
     if (!running || halted) return;
     rafId = requestAnimationFrame(frame);
@@ -698,6 +703,11 @@ function run(view: SceneView) {
     const f = ctl.frame(dt, now / 1000);
     view.update(f);
     view.render();
+    // the panel can grow after the first layout (fonts, step text): keep the 受力分析 chip and hint above it
+    if (++layoutCheck % 15 === 0) {
+      const key = `${dock.offsetTop}|${dock.offsetHeight}|${tabs.offsetTop + tabs.offsetHeight}`;
+      if (key !== layoutKey) { layoutKey = key; layout(); }
+    }
     const a = view.anchors();
     const L = ctl.labels;
     placeTag(tags.G, a.G, 0, 1, L.G, arrowsOn);

@@ -11,6 +11,11 @@ import { bakeBed, makeWaterMaterial, patchCloud, patchFoliage, patchTerrain, sha
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const rand = mulberry32(7);
 
+// inside the 小红书 container its back / share buttons float over the top corners: leave them room
+const markContainer = () => { if ((window as unknown as { xhs?: unknown }).xhs) document.documentElement.classList.add('in-xhs'); };
+markContainer();
+setTimeout(markContainer, 600);
+
 // ---------- boot: WebGL 2 check, then the scene; otherwise a still picture ----------
 // three.js needs WebGL 2. Phones without it (or that fail to create a context) get the
 // static diorama and the four stage texts instead of a blank page.

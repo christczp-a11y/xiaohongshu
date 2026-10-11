@@ -26,19 +26,22 @@
     sans-serif;
   --grot: 'Helvetica Neue', Helvetica, Arial, var(--sans);
   --display: 'LabSans', var(--sans);
-  --safe-t: 0px;
+  --xhs-nav: 0px;        /* set by html.in-xhs: room for the 小红书 container's floating back / share buttons */
+  --safe-t: var(--xhs-nav);
   --safe-b: 0px;
   color-scheme: light;
 }
 /* safe areas: the PC simulator injects --safe-area-inset-*, phones report env(); Chrome 61 knows neither */
 @supports (top: env(safe-area-inset-top)) {
   :root {
-    --safe-t: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+    --safe-t: calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + var(--xhs-nav));
     --safe-b: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   }
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
+html.in-xhs { --xhs-nav: 40px; }
+
 html, body { height: 100%; background: #f2f2f4; overflow: hidden; }
 html { touch-action: manipulation; }
 body { font-family: var(--sans); color: var(--ink); -webkit-user-select: none; user-select: none;

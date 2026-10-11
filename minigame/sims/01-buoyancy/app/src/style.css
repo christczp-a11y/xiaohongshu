@@ -97,11 +97,14 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .tag.b { background: var(--accent); color: #fff; box-shadow: 0 3px 0 var(--accent-edge); }
 .tag.cup { font-family: var(--sans); font-weight: 600; color: var(--ink-2); }
 
-.hint { position: absolute; left: 50%; transform: translateX(-50%); font-size: 13px; font-weight: 700; white-space: nowrap;
-  padding: 9px 15px; border-radius: 12px; background: var(--dark); color: #fff;
-  box-shadow: 0 4px 0 var(--dark-edge), 0 14px 24px rgba(0, 0, 0, 0.16); transition: opacity 0.5s; }
+/* the first-time hint is a strip at the top of the panel, never over the scene; it stands in for the
+   step line until the first touch, then folds away and the step line takes its place */
+.hint { display: flex; align-items: center; justify-content: center; height: 30px; margin-bottom: 8px; border-radius: 10px;
+  background: var(--dark); color: #fff; font-size: 13px; font-weight: 700; white-space: nowrap;
+  box-shadow: 0 3px 0 var(--dark-edge); }
 .hint .hand { display: inline-block; margin-right: 7px; animation: bob 1.4s ease-in-out infinite; }
-.hint.gone { opacity: 0; pointer-events: none; }
+.hint.gone { display: none; }
+.hint:not(.gone) ~ .panel .guide { display: none; }
 @keyframes bob { 50% { transform: translateY(3px); } }
 
 .chip { position: absolute; left: 14px; display: flex; align-items: center; padding: 6px 7px 6px 11px;
@@ -113,44 +116,47 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 [aria-pressed='false'] .sw { background: #c7c7cc; }
 [aria-pressed='false'] .sw::after { left: 3px; }
 
-/* --- reading panel -------------------------------------------------------------------------------- */
-.dock { position: absolute; left: 12px; right: 12px; bottom: calc(var(--safe-b) + 16px); }
-.card { border-radius: 22px; background: #fff; padding: 12px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 6px 0 var(--well-edge), 0 24px 44px rgba(0, 0, 0, 0.12); }
-.guide { display: flex; align-items: center; padding: 0 2px; min-height: 26px; font-size: 14.5px; font-weight: 700; }
+/* --- reading panel: a sheet flush with the bottom of the screen ----------------------------------- */
+/* its bottom padding covers the home indicator, so nothing of the scene shows under it */
+.dock { position: absolute; left: 0; right: 0; bottom: 0; }
+.card { border-radius: 24px 24px 0 0; background: #fff; padding: 10px 14px calc(var(--safe-b) + 8px);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 -12px 32px rgba(0, 0, 0, 0.10); }
+.guide { display: flex; align-items: center; padding: 0 2px; min-height: 24px; font-size: 14.5px; font-weight: 700; }
 .guide span { flex: 1; min-width: 0; }
 /* 重做 sits at the end of the step line, so the panel needs no button row */
-.redo { flex: none; height: 30px; margin-left: 10px; padding: 0 12px; border-radius: 9px; font-family: var(--display);
+.redo { flex: none; height: 28px; margin-left: 10px; padding: 0 12px; border-radius: 9px; font-family: var(--display);
   font-weight: 700; font-size: 14px; --depth: 3px; background: var(--well); --edge: var(--key-edge); --rim: transparent; }
 .step { flex: none; width: 26px; height: 26px; margin-right: 10px; border-radius: 8px; display: flex; align-items: center;
   justify-content: center; background: var(--dark); color: #fff; font-family: var(--display); font-size: 15px; font-weight: 900;
   font-style: normal; box-shadow: 0 2px 0 var(--dark-edge); }
 .step.dotted { width: 10px; height: 10px; border-radius: 2px; margin: 0 18px 0 8px; box-shadow: none; }
 
-.picks { display: grid; grid-template-columns: 1fr 1fr; grid-gap: 12px; margin-top: 12px; padding-top: 10px;
+/* each label sits in the row, left of its keys, so a pick row is one line tall */
+.picks { display: grid; grid-template-columns: 1fr 1fr; grid-gap: 10px; margin-top: 8px; padding-top: 8px;
   border-top: 1px solid var(--well-edge); }
 .picks.lead { grid-template-columns: 4fr 3fr; }
-.pick { min-width: 0; }
-.pick .lbl { display: block; margin: 0 0 5px 1px; font-size: 11px; font-weight: 700; color: var(--ink-3); letter-spacing: 1px; }
-.seg { display: flex; }
-.seg button { flex: 1; min-width: 0; height: 30px; border-radius: 9px; font-family: var(--display); font-weight: 700; font-size: 14px;
+.pick { min-width: 0; display: flex; align-items: center; }
+.pick .lbl { flex: none; width: 26px; margin-right: 6px; font-size: 11px; font-weight: 700; color: var(--ink-3); letter-spacing: 1px;
+  line-height: 1.2; }
+.seg { display: flex; flex: 1; min-width: 0; }
+.seg button { flex: 1; min-width: 0; height: 28px; border-radius: 9px; font-family: var(--display); font-weight: 700; font-size: 14px;
   white-space: nowrap; --depth: 3px; }
-.seg button + button { margin-left: 5px; }
+.seg button + button { margin-left: 4px; }
 
-.meters { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; grid-gap: 6px; margin-top: 12px; }
-.m { border-radius: 12px; background: var(--well); padding: 7px 8px 7px; box-shadow: inset 0 -3px 0 var(--well-edge); }
+.meters { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; grid-gap: 6px; margin-top: 8px; }
+.m { border-radius: 12px; background: var(--well); padding: 5px 8px 6px; box-shadow: inset 0 -3px 0 var(--well-edge); }
 .m .k { display: flex; align-items: center; font-size: 10.5px; font-weight: 600; color: var(--ink-2);
   white-space: nowrap; overflow: hidden; }
-.m b { display: block; margin-top: 2px; font-family: var(--grot); font-size: 24px; line-height: 1.1; font-weight: 700;
+.m b { display: block; margin-top: 1px; font-family: var(--grot); font-size: 22px; line-height: 1.05; font-weight: 700;
   letter-spacing: -0.8px; font-variant-numeric: tabular-nums; }
 .dot { flex: none; width: 7px; height: 7px; margin-right: 4px; border-radius: 1.5px; }
 .dot.g { background: var(--dark); }
 .dot.t { background: var(--ink-3); }
 .dot.b { background: var(--accent); }
 .dot.w { box-shadow: inset 0 0 0 1.5px var(--accent); }
-.formula { margin-top: 7px; padding-left: 2px; font-size: 11px; color: var(--ink-3); letter-spacing: 0.5px; }
+.formula { margin-top: 5px; padding-left: 2px; font-size: 11px; color: var(--ink-3); letter-spacing: 0.5px; }
 
-.eq { margin-top: 9px; display: flex; align-items: center; height: 40px; padding: 0 12px; border-radius: 12px;
+.eq { margin-top: 8px; display: flex; align-items: center; height: 36px; padding: 0 12px; border-radius: 12px;
   background: var(--well); box-shadow: inset 0 -3px 0 var(--well-edge); color: var(--ink-2);
   font-family: var(--grot); font-size: 16px; font-weight: 700; transition: background 0.3s, color 0.3s, box-shadow 0.3s; }
 .eq > * + * { margin-left: 10px; }
@@ -160,16 +166,14 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .eq.ok { background: var(--dark); color: #fff; box-shadow: 0 4px 0 var(--dark-edge); }
 .eq.ok .sign { box-shadow: none; }
 
-.actions { display: grid; grid-template-columns: 1fr 2.1fr; grid-gap: 10px; margin-top: 12px; }
-.btn { height: 46px; border-radius: 14px; font-family: var(--display); font-weight: 700; font-size: 16px; --depth: 5px; }
+.actions { display: grid; grid-template-columns: 1fr 2.1fr; grid-gap: 10px; margin-top: 10px; }
+.btn { height: 42px; border-radius: 14px; font-family: var(--display); font-weight: 700; font-size: 16px; --depth: 5px; }
 .btn:not(.primary):not(:disabled) { background: var(--well); --edge: var(--key-edge); --rim: transparent; }
 
-.chart { margin-top: 12px; border-radius: 12px; background: var(--well); box-shadow: inset 0 -3px 0 var(--well-edge);
-  padding: 8px 8px 6px; }
-.chart-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 700;
-  color: var(--ink-2); letter-spacing: 0.5px; }
-.chart-head button { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 7px; --depth: 2px; }
-#chart { display: block; width: 100%; height: 92px; margin-top: 2px; }
+/* the chart's title is drawn inside the canvas and 清空 sits on the step line, so the block is just the plot */
+.chart { margin-top: 8px; border-radius: 12px; background: var(--well); box-shadow: inset 0 -3px 0 var(--well-edge);
+  padding: 4px 6px 3px; }
+#chart { display: block; width: 100%; height: 70px; }
 
 /* --- 关于: a plain overlay (older WebViews have no <dialog>) ------------------------------------- */
 .sheet { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 5; display: flex; align-items: center;
@@ -201,6 +205,8 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 /* landscape / projector: the readings move to a column on the right */
 @media (min-aspect-ratio: 1/1) {
   .dock { left: auto; right: 16px; top: calc(var(--safe-t) + 16px); bottom: auto; width: 360px; }
+  .card { border-radius: 22px; padding-bottom: 10px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 6px 0 var(--well-edge), 0 24px 44px rgba(0, 0, 0, 0.12); }
   .tabs { right: auto; width: 380px; }
   .inset { right: 392px; top: auto; bottom: 26px; }
   .chip { left: 14px; bottom: 26px; top: auto !important; }

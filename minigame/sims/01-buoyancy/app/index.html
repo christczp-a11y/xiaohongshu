@@ -34,12 +34,11 @@
   <div class="tag t" id="lblN">F支</div>
   <div class="tag cup" id="lblCup">水</div>
 
-  <div class="hint" id="hint"><span class="hand">↕</span><span id="hintText">上下拖动，把铝块放进水里</span></div>
-
   <button class="chip key" id="arrowToggle" aria-pressed="true">受力分析<span class="sw"></span></button>
 
   <section class="dock" id="dock">
     <div class="card">
+      <div class="hint" id="hint"><span class="hand">↕</span><span id="hintText">上下拖动，把铝块放进水里</span></div>
       <!-- 称一称 -->
       <div class="panel" data-for="weigh">
         <div class="guide"><b class="step" id="stepNo">1</b><span id="stepText">先读测力计：铝块在空气中有多重？</span><button class="key redo" id="reset">重做</button></div>
@@ -55,7 +54,7 @@
 
       <!-- 变一变 -->
       <div class="panel" data-for="vary" hidden>
-        <div class="guide"><i class="step dotted"></i><span id="varyText">往下拖，把铝块放进水里</span></div>
+        <div class="guide"><i class="step dotted"></i><span id="varyText">往下拖，把铝块放进水里</span><button class="key redo" id="clearChart">清空曲线</button></div>
         <div class="picks">
           <div class="pick"><span class="lbl">液体</span><div class="seg sm" id="varyLiquid"></div></div>
           <div class="pick"><span class="lbl">物块</span><div class="seg sm" id="varySolid"></div></div>
@@ -66,10 +65,7 @@
           <div class="m"><span class="k"><i class="dot b"></i>浮力 F浮</span><b id="yB">0.00</b></div>
           <div class="m"><span class="k">浸入深度 h</span><b id="yH">0.0</b></div>
         </div>
-        <div class="chart">
-          <div class="chart-head"><span>F浮 随浸入深度 h 的变化</span><button class="key" id="clearChart">清空</button></div>
-          <canvas id="chart"></canvas>
-        </div>
+        <div class="chart"><canvas id="chart"></canvas></div>
       </div>
 
       <!-- 浮还是沉 -->

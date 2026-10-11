@@ -191,6 +191,7 @@ function run(view: SceneView) {
     const text = $('varyText');
     const chart = $<HTMLCanvasElement>('chart');
     let chartKey = '';
+    let lastRec: { liq: L; bin: number } | null = null;   // last depth sample, to bridge fast drags
 
     const say = (t: string) => {
       note = t;
@@ -223,6 +224,7 @@ function run(view: SceneView) {
     );
     $('clearChart').addEventListener('click', () => {
       curves.clear();
+      lastRec = null;
       chartKey = '';
     });
 
@@ -355,10 +357,21 @@ function run(view: SceneView) {
         let m = curves.get(liq);
         if (!m) curves.set(liq, (m = new Map()));
         const bin = Math.round(h * 10);
+        // a quick drag moves several bins in one frame: fill the ones it skipped, so the line stays
+        // solid instead of breaking into dashes (the chart only lifts the pen over unexplored depths)
+        if (lastRec && lastRec.liq === liq && Math.abs(bin - lastRec.bin) > 1) {
+          const dir = bin > lastRec.bin ? 1 : -1;
+          for (let b = lastRec.bin + dir; b !== bin; b += dir) {
+            // the skipped depths take the model's steady value, so the knee at 刚好浸没 stays sharp
+            if (!m.has(b)) m.set(b, buoyancyAt(b / 10, liquid(liq).density));
+          }
+          chartKey = '';
+        }
         if (!m.has(bin)) {
           m.set(bin, r.buoyancy);
           chartKey = '';
         }
+        lastRec = { liq, bin };
         const key = `${liq}|${bin}|${round2(r.buoyancy)}|${chart.clientWidth}`;
         if (key !== chartKey) {
           chartKey = key;

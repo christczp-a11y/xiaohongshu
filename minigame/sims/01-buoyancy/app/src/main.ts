@@ -23,10 +23,13 @@ const H_MAX = DEFAULT_SETUP.spoutHeight - MIN_BOTTOM; // deepest the cube can go
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const params = new URLSearchParams(location.search);
-// inside the 小红书 container its back / share buttons float over the top corners: leave them room
-const markContainer = () => { if ((window as unknown as { xhs?: unknown }).xhs) document.documentElement.classList.add('in-xhs'); };
-markContainer();
-setTimeout(markContainer, 600);
+declare const __BUILD__: string;
+{
+  const el = document.createElement('div');
+  el.id = 'build';
+  el.textContent = `版本 ${__BUILD__}`;
+  document.body.appendChild(el);
+}
 const pose = params.get('pose');
 
 const canvas = $<HTMLCanvasElement>('c');

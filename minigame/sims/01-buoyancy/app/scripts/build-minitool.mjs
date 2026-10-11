@@ -15,6 +15,7 @@ mkdirSync(OUT);
 
 await build({
   entryPoints: ['src/main.ts'], bundle: true, format: 'iife', target: TARGET,
+  define: { __BUILD__: JSON.stringify(((d) => `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`)(new Date())) },
   minify: true, legalComments: 'eof', outfile: `${OUT}/main.js`, logLevel: 'warning',
 });
 // the font urls in style.css become fonts/<name>.woff2 next to it

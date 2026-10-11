@@ -26,7 +26,7 @@
     sans-serif;
   --grot: 'Helvetica Neue', Helvetica, Arial, var(--sans);
   --display: 'LabSans', var(--sans);
-  --xhs-nav: 40px;       /* room for the 小红书 container's floating back / avatar / share buttons */
+  --xhs-nav: 0px;        /* no extra strip: the scene gets the room (Chris); keep tappable things out of the button corners */
   --safe-t: var(--xhs-nav);
   --safe-b: 0px;
   color-scheme: light;
@@ -71,7 +71,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .kicker span + span { margin-left: 16px; }
 .title { margin-top: 6px; font-family: var(--display); font-weight: 900; font-size: 44px; line-height: 0.98;
   letter-spacing: -0.01em; }
-.round { width: 40px; height: 40px; border-radius: 13px; font-family: var(--display); font-weight: 900; font-size: 20px; }
+.round { margin-top: 30px; width: 40px; height: 40px; border-radius: 13px; font-family: var(--display); font-weight: 900; font-size: 20px; }
 
 /* --- mode tabs ----------------------------------------------------------------------------- */
 .tabs { position: absolute; top: calc(var(--safe-t) + 92px); left: 14px; right: 14px;
@@ -220,5 +220,5 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 }
 
 /* build stamp, so a phone screenshot shows which package is running */
-/* sits in the empty middle of the top strip kept for the container's buttons */
-#build { position: fixed; left: 50%; top: calc(var(--safe-t) - 26px); transform: translateX(-50%); padding: 2px 5px; border-radius: 4px; background: rgba(255, 255, 255, .8); font: 9px/1 -apple-system, sans-serif; color: rgba(0, 0, 0, .45); white-space: nowrap; pointer-events: none; z-index: 5; }
+/* top centre, between the container's back and share buttons */
+#build { position: fixed; left: 50%; top: calc(var(--safe-t) + 2px); transform: translateX(-50%); padding: 2px 5px; border-radius: 4px; background: rgba(255, 255, 255, .8); font: 9px/1 -apple-system, sans-serif; color: rgba(0, 0, 0, .45); white-space: nowrap; pointer-events: none; z-index: 5; }

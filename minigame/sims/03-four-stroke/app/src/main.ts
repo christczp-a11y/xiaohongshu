@@ -297,7 +297,7 @@ function run(view: SceneView) {
     const free: FreeArea = still
       ? { top: 56, bottom: 24, left: 24, right: 24 }
       : landscape.matches
-        ? { top: t.bottom + 8, bottom: 8, left: 8, right: W - d.left + 12 }
+        ? { top: t.bottom + 8 + PLUG_TAG, bottom: 20, left: 8, right: W - d.left + 12 }
         : { top: t.bottom + 6 + PLUG_TAG, bottom: H - d.top + 4, left: 0, right: 0 };
     view.resize(W, H, free);
     // portrait: the chip sits just above the panel, anchored by its bottom edge

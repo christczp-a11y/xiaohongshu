@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   CRANK_R,
+  ENERGY_SPLIT,
+  FUEL_PER_POWER,
   STROKE,
   advance,
+  energyAfter,
   gasTorque,
   initialState,
   pinSpeed,
@@ -92,6 +95,31 @@ describe('energy', () => {
   it('only pushes the piston in the power stroke; the other three strokes ride on the flywheel', () => {
     for (const a of [90, 270, 630]) expect(gasTorque(a, true)).toBeLessThanOrEqual(0);
     expect(gasTorque(450, true)).toBeGreaterThan(0);
+  });
+});
+
+describe('where the energy goes', () => {
+  for (const kind of ['petrol', 'diesel'] as const) {
+    const s = ENERGY_SPLIT[kind];
+    it(`${kind}: the four shares add up to all of the fuel's energy`, () => {
+      expect(s.work + s.exhaust + s.cooling + s.friction).toBe(100);
+    });
+    it(`${kind}: the exhaust carries off the biggest share`, () => {
+      expect(s.exhaust).toBeGreaterThan(Math.max(s.cooling, s.friction, s.work));
+    });
+  }
+
+  it('turns more of the fuel into work in a diesel', () => {
+    expect(ENERGY_SPLIT.diesel.work).toBeGreaterThan(ENERGY_SPLIT.petrol.work);
+  });
+
+  it('counts efficiency as useful work over the fuel energy, the same after any number of strokes', () => {
+    expect(energyAfter('petrol', 0).efficiency).toBeNull();
+    for (const n of [1, 4, 37]) {
+      const e = energyAfter('petrol', n);
+      expect(e.fuel).toBe(n * FUEL_PER_POWER);
+      expect(e.efficiency).toBeCloseTo(ENERGY_SPLIT.petrol.work / 100, 9);
+    }
   });
 });
 

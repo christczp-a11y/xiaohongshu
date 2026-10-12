@@ -13,7 +13,13 @@ export const STROKES = ['intake', 'compression', 'power', 'exhaust'] as const;
 export type Stroke = (typeof STROKES)[number];
 export const STROKE_NAMES: Record<Stroke, string> = { intake: '吸气', compression: '压缩', power: '做功', exhaust: '排气' };
 
-/** Where the spark plug fires: just before the top at the end of compression, as engines turning slowly do. */
+/** Petrol engines are lit by a spark plug; diesels have an injector and light by compression. */
+export type Kind = 'petrol' | 'diesel';
+
+/**
+ * Where the spark plug fires, or the diesel's injector sprays: just before the top at the end
+ * of compression, as engines turning slowly do.
+ */
 export const SPARK_AT = 355;
 const BURN_END = 380; // the charge has burnt through by here
 
@@ -183,6 +189,29 @@ export function step(s: EngineState, dt: number): { state: EngineState; events: 
     if (r.events.power) starter = 0; // it has caught: the starter lets go
   }
   return { state: { ...st, omega, starter }, events };
+}
+
+// --- where the fuel's energy goes ---------------------------------------------------------------------------
+
+/** Energy the fuel gives out in one power stroke, in shares (an illustration, not joules). */
+export const FUEL_PER_POWER = 100;
+
+/**
+ * How the fuel's energy splits, in shares of 100. Illustrative numbers in the range textbook
+ * exercises use; real engines vary with the model and how hard they work. What holds for both:
+ * the exhaust carries off the biggest share, and a diesel turns more of it into work.
+ */
+export const ENERGY_SPLIT: Record<Kind, { work: number; exhaust: number; cooling: number; friction: number }> = {
+  petrol: { work: 25, exhaust: 35, cooling: 30, friction: 10 },
+  diesel: { work: 30, exhaust: 35, cooling: 25, friction: 10 },
+};
+
+/** Energy totals after some power strokes, and the efficiency η = W有用 / Q放 (null before the first). */
+export function energyAfter(kind: Kind, powers: number) {
+  const s = ENERGY_SPLIT[kind];
+  const fuel = powers * FUEL_PER_POWER;
+  const work = (powers * FUEL_PER_POWER * s.work) / 100;
+  return { fuel, work, efficiency: fuel > 0 ? work / fuel : null };
 }
 
 /** Readings for the panel, counted from the start. */

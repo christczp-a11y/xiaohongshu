@@ -12,9 +12,12 @@ declare const __BUILD__: string;
   el.textContent = `版本 ${__BUILD__}`;
   document.body.appendChild(el);
 }
-// ?pose=intake|compression|power|exhaust|spark stops the engine at a telling moment (screenshots, video)
-const POSES: Record<string, number> = { intake: 100, compression: 300, spark: 356, power: 372, exhaust: 640 };
+// ?pose=intake|compression|spark|inject|power|exhaust stops the engine at a telling moment (screenshots, video)
+const POSES: Record<string, number> = { intake: 100, compression: 300, spark: 356, inject: 362, power: 372, exhaust: 640 };
 const pose = params.get('pose');
+// ?mode=petrol|diesel|energy opens that page; ?kind=diesel picks the engine on the energy page
+type Mode = 'petrol' | 'diesel' | 'energy';
+const MODES: Mode[] = ['petrol', 'diesel', 'energy'];
 
 const canvas = $<HTMLCanvasElement>('c');
 
@@ -36,20 +39,54 @@ function boot(): SceneView | null {
     return null;
   }
 }
+
+const SAY: Record<E.Kind, Record<E.Stroke, string>> = {
+  petrol: {
+    intake: '进气门打开，活塞向下，吸进汽油和空气',
+    compression: '两个气门关闭，活塞向上，压缩混合物',
+    power: '火花塞点火，燃气推动活塞向下',
+    exhaust: '排气门打开，活塞向上，排出废气',
+  },
+  diesel: {
+    intake: '进气门打开，活塞向下，只吸进空气',
+    compression: '两个气门关闭，活塞向上，空气越压越热',
+    power: '喷油嘴喷油，柴油遇热自燃，推动活塞',
+    exhaust: '排气门打开，活塞向上，排出废气',
+  },
+};
+// what lights the charge, for the notes
+const FIRE: Record<E.Kind, { part: string; off: string; wait: string; jump: string; formula: string }> = {
+  petrol: {
+    part: '火花塞',
+    off: '熄火了：火花塞不再点火，飞轮慢慢停下来',
+    wait: '启动电机带着飞轮转，等火花塞点着……',
+    jump: '火花塞刚点着，燃气马上推动活塞。转飞轮或点「启动」继续',
+    formula: '1 个工作循环：4 个冲程，曲轴转 2 圈，活塞往复 2 次，做功 1 次',
+  },
+  diesel: {
+    part: '喷油嘴',
+    off: '熄火了：喷油嘴不再喷油，飞轮慢慢停下来',
+    wait: '启动电机带着飞轮转，等柴油着火……',
+    jump: '喷油嘴刚喷油，柴油自己烧起来，推动活塞。转飞轮或点「启动」继续',
+    formula: '和汽油机不同：喷油嘴代替火花塞，只吸空气，压得更狠，压燃式',
+  },
+};
+
+// start once the tables above exist: run() reads them straight away
 const booted = boot();
 if (booted) run(booted);
 else showFallback('这台设备暂时显示不了 3D 画面，先看看静态的图和要点吧。');
 
-const SAY: Record<E.Stroke, string> = {
-  intake: '进气门打开，活塞向下，吸进汽油和空气',
-  compression: '两个气门关闭，活塞向上，压缩混合物',
-  power: '火花塞点火，燃气推动活塞向下',
-  exhaust: '排气门打开，活塞向上，排出废气',
-};
-
 function run(view: SceneView) {
   const landscape = window.matchMedia('(min-aspect-ratio: 1/1)');
   const clamp = THREE.MathUtils.clamp;
+
+  const asked = params.get('mode') as Mode;
+  let mode: Mode = MODES.indexOf(asked) >= 0 ? asked : 'petrol';
+  let energyKind: E.Kind = params.get('kind') === 'diesel' ? 'diesel' : 'petrol';
+  const kindNow = (): E.Kind => (mode === 'energy' ? energyKind : mode);
+  let energyBase = 0; // power strokes before the energy page started counting
+  let pulseUntil = 0;
 
   let st = E.initialState();
   let held = false;
@@ -82,8 +119,15 @@ function run(view: SceneView) {
   const out = { angle: $('vAngle'), strokes: $('vStrokes'), turns: $('vTurns'), powers: $('vPowers') };
   const energy = $('energy');
   const energyText = $('energyText');
-  const startBtn = $<HTMLButtonElement>('startBtn');
+  const formula = $('formula');
+  const startBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.start'));
   const strokeKeys = Array.from(document.querySelectorAll<HTMLButtonElement>('#strokes button'));
+  const flow = $('flow');
+  const flowParts = { work: $('fWork'), exhaust: $('fExhaust'), cooling: $('fCooling'), friction: $('fFriction') };
+  const eOut = { powers: $('ePowers'), fuel: $('eFuel'), work: $('eWork'), eff: $('eEff') };
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('#tabs button'));
+  const kindKeys = Array.from(document.querySelectorAll<HTMLButtonElement>('#kinds button'));
+  const panels = Array.from(document.querySelectorAll<HTMLElement>('.panel'));
   if (pose) hint.classList.add('gone');
 
   const touched = () => hint.classList.add('gone');
@@ -103,20 +147,63 @@ function run(view: SceneView) {
       handTarget = st.theta;
       paused = true;
       released = false;
-      say(k === 2 ? '火花塞刚点着，燃气马上推动活塞。转飞轮或点「启动」继续' : '停在这个冲程的开头。转飞轮或点「启动」继续', 3.5);
+      say(k === 2 ? FIRE[kindNow()].jump : '停在这个冲程的开头。转飞轮或点「启动」继续', 3.5);
     }),
   );
-  startBtn.addEventListener('click', () => {
-    touched();
-    if (running()) {
-      st = { ...st, ignition: false, starter: 0 };
-      say('熄火了：火花塞不再点火，飞轮慢慢停下来');
-    } else {
-      st = { ...st, ignition: true, starter: 2.5 };
-      paused = false;
-      released = false;
-      say('启动电机带着飞轮转，等火花塞点着……', 2.5);
-    }
+  const start = () => {
+    st = { ...st, ignition: true, starter: 2.5 };
+    paused = false;
+    released = false;
+    say(FIRE[kindNow()].wait, 2.5);
+  };
+  startBtns.forEach((b) =>
+    b.addEventListener('click', () => {
+      touched();
+      if (running()) {
+        st = { ...st, ignition: false, starter: 0 };
+        say(FIRE[kindNow()].off);
+      } else start();
+    }),
+  );
+
+  // --- pages: petrol, diesel, where the energy goes ------------------------------------------------
+  const app = $('app');
+  function setMode(m: Mode) {
+    mode = m;
+    noteUntil = 0;
+    app.dataset.mode = m;
+    tabs.forEach((b) => {
+      const on = b.dataset.mode === m;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-selected', String(on));
+    });
+    panels.forEach((p) => (p.hidden = p.dataset.for !== (m === 'energy' ? 'energy' : 'engine')));
+    if (m === 'energy') {
+      touched();
+      setKind(energyKind);
+      if (!running() && !pose) start();
+    } else formula.textContent = FIRE[m].formula;
+    shownKey = '';
+  }
+  // the energy page counts from when it opens, or when the engine is switched or zeroed
+  function setKind(k: E.Kind) {
+    energyKind = k;
+    energyBase = st.powers;
+    kindKeys.forEach((b) => b.classList.toggle('on', b.dataset.kind === k));
+    const split = E.ENERGY_SPLIT[k];
+    (Object.keys(flowParts) as (keyof typeof flowParts)[]).forEach((part) => {
+      const el = flowParts[part];
+      el.style.flexGrow = String(split[part]);
+      el.style.flexBasis = '0';
+      el.querySelector('b')!.textContent = `${split[part]}%`;
+    });
+    shownKey = '';
+  }
+  tabs.forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode as Mode)));
+  kindKeys.forEach((b) => b.addEventListener('click', () => setKind(b.dataset.kind as E.Kind)));
+  $('flowReset').addEventListener('click', () => {
+    energyBase = st.powers;
+    shownKey = '';
   });
   $('reset').addEventListener('click', () => {
     st = E.initialState();
@@ -197,9 +284,9 @@ function run(view: SceneView) {
 
   // --- layout ----------------------------------------------------------------------------------------
   const dock = $('dock');
-  const header = document.querySelector<HTMLElement>('.top')!;
+  const header = $('tabs');
   const chip = $('tagToggle');
-  // the spark plug's name sits above the engine's highest point, so leave it room under the title
+  // the spark plug's name sits above the engine's highest point, so leave it room under the tabs
   const PLUG_TAG = 26;
   function layout() {
     const W = canvas.clientWidth;
@@ -210,7 +297,7 @@ function run(view: SceneView) {
     const free: FreeArea = still
       ? { top: 56, bottom: 24, left: 24, right: 24 }
       : landscape.matches
-        ? { top: t.bottom + 8, bottom: 8, left: 8, right: W - d.left + 12 }
+        ? { top: t.bottom + 8 + PLUG_TAG, bottom: 20, left: 8, right: W - d.left + 12 }
         : { top: t.bottom + 6 + PLUG_TAG, bottom: H - d.top + 4, left: 0, right: 0 };
     view.resize(W, H, free);
     // portrait: the chip sits just above the panel, anchored by its bottom edge
@@ -336,18 +423,28 @@ function run(view: SceneView) {
       say('走完 1 个循环：4 个冲程，曲轴转 2 圈，做功 1 次', 4.5);
     }
 
-    view.update({ theta: st.theta, burnt: st.burnt, sparkAge: clock - sparkAt, time: clock });
+    if (events.power && mode === 'energy') pulseUntil = clock + 0.18;
+    const kind = kindNow();
+    view.update({ theta: st.theta, burnt: st.burnt, sparkAge: clock - sparkAt, time: clock, kind });
     view.render();
 
     // readings
     const r = E.readings(st);
     const k = E.strokeIndex(st.theta);
-    const sentence = clock < noteUntil ? note : SAY[r.stroke];
+    const sentence = clock < noteUntil ? note : SAY[kind][r.stroke];
     const live = running();
     const powerNow = r.stroke === 'power' && st.burnt;
-    const key = `${k}|${sentence}|${Math.floor(r.angle)}|${r.strokes}|${r.turns.toFixed(1)}|${r.powers}|${live}|${powerNow}`;
+    const counted = Math.max(0, st.powers - energyBase);
+    const pulse = clock < pulseUntil;
+    const key = `${mode}|${kind}|${k}|${sentence}|${Math.floor(r.angle)}|${r.strokes}|${r.turns.toFixed(1)}|${r.powers}|${live}|${powerNow}|${counted}|${pulse}`;
     if (key !== shownKey) {
       shownKey = key;
+      const e = E.energyAfter(kind, counted);
+      eOut.powers.textContent = String(counted);
+      eOut.fuel.textContent = String(e.fuel);
+      eOut.work.textContent = String(e.work);
+      eOut.eff.textContent = e.efficiency === null ? '—' : `${Math.round(e.efficiency * 100)}%`;
+      flow.classList.toggle('pulse', pulse);
       stepNo.textContent = String(k + 1);
       stepText.textContent = sentence;
       strokeKeys.forEach((b, i) => b.classList.toggle('on', i === k));
@@ -361,10 +458,12 @@ function run(view: SceneView) {
           : r.stroke === 'power'
             ? st.burnt
               ? '内能 → 机械能'
-              : '没点火，不做功'
+              : kind === 'diesel'
+                ? '没喷油，不做功'
+                : '没点火，不做功'
             : '靠飞轮惯性';
       energy.classList.toggle('ok', powerNow);
-      startBtn.textContent = live ? '熄火' : '启动';
+      startBtns.forEach((b) => (b.textContent = live ? '熄火' : '启动'));
     }
 
     // the panel can grow after the first layout (fonts, step text): keep the chip above it
@@ -373,16 +472,28 @@ function run(view: SceneView) {
       if (lk !== layoutKey) {
         layoutKey = lk;
         layout();
+        tagWidth.clear();
       }
     }
     const a = view.anchors();
-    const lift = E.valveLift(st.theta);
-    placeTag(tags.intake, a.intake, 0, -1, lift.intake > 0.02 ? '进气门 开' : '进气门 关', lift.intake > 0.02);
-    placeTag(tags.exhaust, a.exhaust, 0, -1, lift.exhaust > 0.02 ? '排气门 开' : '排气门 关', lift.exhaust > 0.02);
-    placeTag(tags.plug, a.plug, 0, -1, '火花塞', clock - sparkAt < 0.4);
-    placeTag(tags.piston, a.piston, -1, 0, '活塞', false);
-    placeTag(tags.crank, a.crank, -1, 0, '曲轴', false);
-    placeTag(tags.flywheel, a.flywheel, 1, 0, '飞轮', false);
+    if (mode === 'energy') {
+      // the same labels, now saying where each share of the fuel's energy leaves
+      const split = E.ENERGY_SPLIT[kind];
+      placeTag(tags.intake, a.intake, 0, -1, '', false, false);
+      placeTag(tags.plug, a.plug, 0, -1, '燃料放出 100%', clock - sparkAt < 0.4);
+      placeTag(tags.exhaust, a.exhaust, 0, -1, `废气带走 ${split.exhaust}%`, false);
+      placeTag(tags.piston, a.fins, -1, 0, `散热 ${split.cooling}%`, false);
+      placeTag(tags.crank, a.crank, -1, 0, `摩擦 ${split.friction}%`, false);
+      placeTag(tags.flywheel, a.flywheel, 1, 0, `有用的功 ${split.work}%`, true);
+    } else {
+      const lift = E.valveLift(st.theta);
+      placeTag(tags.intake, a.intake, 0, -1, lift.intake > 0.02 ? '进气门 开' : '进气门 关', lift.intake > 0.02);
+      placeTag(tags.exhaust, a.exhaust, 0, -1, lift.exhaust > 0.02 ? '排气门 开' : '排气门 关', lift.exhaust > 0.02);
+      placeTag(tags.plug, a.plug, 0, -1, FIRE[kind].part, clock - sparkAt < 0.4);
+      placeTag(tags.piston, a.piston, -1, 0, '活塞', false);
+      placeTag(tags.crank, a.crank, -1, 0, '曲轴', false);
+      placeTag(tags.flywheel, a.flywheel, 1, 0, '飞轮', false);
+    }
     if (statsEl && (statsTick += raw) > 0.5) {
       statsTick = 0;
       const i = view.info();
@@ -390,16 +501,29 @@ function run(view: SceneView) {
     }
   }
 
-  /** Pin a label next to an anchor; sx/sy pick the side (-1, 0, 1). Dark while that part is acting. */
-  function placeTag(el: HTMLElement, p: THREE.Vector3, sx: number, sy: number, text: string, active: boolean) {
+  /**
+   * Pin a label next to an anchor; sx/sy pick the side (-1, 0, 1), and a long label is kept
+   * inside the screen. Dark while that part is acting.
+   */
+  const tagWidth = new Map<HTMLElement, number>(); // measured again after a relayout (fonts, rotation)
+  if (document.fonts) document.fonts.ready.then(() => tagWidth.clear());
+  function placeTag(el: HTMLElement, p: THREE.Vector3, sx: number, sy: number, text: string, active: boolean, shown = true) {
+    if (el.textContent !== text) {
+      el.textContent = text;
+      tagWidth.delete(el);
+    }
+    let w = tagWidth.get(el);
+    if (w === undefined || w === 0) tagWidth.set(el, (w = el.offsetWidth));
     proj.copy(p).project(view.camera);
-    const x = (proj.x * 0.5 + 0.5) * canvas.clientWidth + sx * 6;
+    const W = canvas.clientWidth;
+    const x = (proj.x * 0.5 + 0.5) * W + sx * 6;
     const y = (-proj.y * 0.5 + 0.5) * canvas.clientHeight + sy * 6;
-    el.style.transform = `translate(${x}px, ${y}px) translate(${-50 + sx * 50}%, ${-50 + sy * 50}%)`;
-    el.style.opacity = tagsOn ? '1' : '0';
-    if (el.textContent !== text) el.textContent = text;
+    const left = Math.min(W - 8 - w, Math.max(8, x - (w * (1 - sx)) / 2));
+    el.style.transform = `translate(${left}px, ${y}px) translate(0, ${-50 + sy * 50}%)`;
+    el.style.opacity = tagsOn && shown ? '1' : '0';
     el.classList.toggle('on', active);
   }
 
+  setMode(mode);
   startLoop();
 }
